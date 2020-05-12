@@ -39,11 +39,11 @@ function uint8ArrayToHex(uint8arr) {
     return hexv;
 }
 
-const decode = (uint8arr, wasmReturnAbi) => {
+const decode = (uint8arr, funcabi) => {
     console.log('decode: ', uint8arr.toString());
     let offset = 0;
     let result = {};
-    const values = wasmReturnAbi.forEach(abi => {
+    const values = funcabi.outputs.forEach(abi => {
         const size = sizeMap[abi.type];
         // const size = 32;
         // console.log('decode', uint8arr.slice(offset, offset + size));
@@ -62,23 +62,30 @@ const encode = hex => {
 const storageMap = new WebAssembly.Memory({ initial: 2 }); // Size is in pages.
 
 const initialize =  (wasmHexSource, wabi)  => {
-    const wasmbin = fromHex(wasmHexSource)
-    const wmodule = new WebAssembly.Module(wasmbin);
-    return wrapWasmInstance(wmodule, wabi);
+    return initializeWrap(fromHex(wasmHexSource), wabi);
 }
 
-const wrapWasmInstance = (wmodule, wabi) => {
+
+const initializeWrap =  (wasmbin, wabi)  => {
+    const wmodule = new WebAssembly.Module(wasmbin);
+
     let currentPromise;
 
     const finishAction = answ => {
         if (!currentPromise) throw new Error('No queued promise found.');
-        const decoded = decode(answ, wabi);
-        currentPromise.resolve(decoded);
+        if (currentPromise.name === 'constructor') {
+            const newabi = wabi.filter(abi => abi.name !== 'constructor');
+            const newmodule = initializeWrap(answ, newabi);
+            currentPromise.resolve(newmodule);
+        } else {
+            const decoded = decode(answ, wabi.find(abi => abi.name === currentPromise.name));
+            currentPromise.resolve(decoded);
+        }
         currentPromise = null;
     }
     const revertAction = answ => {
         if (!currentPromise) throw new Error('No queued promise found.');
-        const decoded = decode(answ, wabi);
+        const decoded = decode(answ, wabi.find(abi => abi.name === currentPromise.name));
         currentPromise.reject(decoded);
         currentPromise = null;
     }
@@ -86,11 +93,12 @@ const wrapWasmInstance = (wmodule, wabi) => {
     let minstance;
 
     const getMemory = () => minstance.exports.memory;
-    const importObj = initializeEthImports(storageMap, getMemory, finishAction, revertAction);
+    const importObj = initializeEthImports(storageMap, wasmbin, getMemory, finishAction, revertAction);
     minstance = new WebAssembly.Instance(wmodule, importObj);
     
     const wrappedMain = input => new Promise((resolve, reject) => {
-        currentPromise = {resolve, reject};
+        const fname = wabi.find(abi => abi.name === 'constructor') ? 'constructor' : 'main';
+        currentPromise = {resolve, reject, name: fname};
         minstance.exports.main(input);
     });
 
@@ -100,9 +108,9 @@ const wrapWasmInstance = (wmodule, wabi) => {
     }
 }
 
-const initializeEthImports = (storageMap, getMemory, finishAction, revertAction) => {
+const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, revertAction) => {
     const storeMemory = (bytes, offset, size) => {
-        console.log('storeMemory', bytes, offset, size);
+        console.log('storeMemory', bytes.toString(), offset, size);
         const wmemory = getMemory();
         let mem = new Uint8Array(wmemory.buffer);
         for (let i = 0; i < size; i++) {
@@ -236,10 +244,10 @@ const initializeEthImports = (storageMap, getMemory, finishAction, revertAction)
 
                 // const code = loadMemory(codeOffset_i32, length_i32)
                 // console.log('code', code)
-                console.log('wasmba.length', wasmba.length)
-                // console.log(wasmba.slice(codeOffset_i32, codeOffset_i32 + 2))
-                const runtime = wasmba.slice(codeOffset_i32, codeOffset_i32 + length_i32)
-                console.log('runtime', runtime);
+                console.log('wasmbin.length', wasmbin.length)
+                // console.log(wasmbin.slice(codeOffset_i32, codeOffset_i32 + 2))
+                const runtime = wasmbin.slice(codeOffset_i32, codeOffset_i32 + length_i32)
+                console.log('runtime', runtime.toString());
                 storeMemory(runtime, resultOffset_i32ptr_bytes, length_i32)
             },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
