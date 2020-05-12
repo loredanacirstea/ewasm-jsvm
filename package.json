@@ -1,0 +1,30 @@
+{
+  "name": "ewasm-jsvm",
+  "version": "1.0.0",
+  "description": "\"ewasm virtual machine for javascript\"",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loredanacirstea/ewasm-jsvm.git"
+  },
+  "keywords": [
+    "ewasm",
+    "javascript",
+    "ethereum"
+  ],
+  "author": "Loredana Cirstea <loredana.cirstea@gmail.com>",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/loredanacirstea/ewasm-jsvm/issues"
+  },
+  "homepage": "https://github.com/loredanacirstea/ewasm-jsvm#readme",
+  "devDependencies": {
+    "jest": "^26.0.1"
+  },
+  "dependencies": {
+    "solc": "^0.6.7"
+  }
+}
