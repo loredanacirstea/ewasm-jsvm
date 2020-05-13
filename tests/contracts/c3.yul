@@ -6,27 +6,60 @@ object "TestWasm3" {
     object "Runtime" {
         code {
 
+            let data_ptr := 512
+
             // getAddress
             let addr := address()
-            mstore(0, addr)
+            mstore(data_ptr, addr)
 
             // getCaller
-            mstore(32, caller())
+            mstore(slotPtr(data_ptr, 1), caller())
 
             // getExternalBalance i32
-            mstore(64, balance(addr))
+            mstore(slotPtr(data_ptr, 2), balance(addr))
 
             // getCallValue i32
-            mstore(96, callvalue())
+            mstore(slotPtr(data_ptr, 3), callvalue())
 
             // getCallDataSize
-            mstore(128, calldatasize())
+            mstore(slotPtr(data_ptr, 4), calldatasize())
 
             // getTxOrigin
-            mstore(160, origin())
+            mstore(slotPtr(data_ptr, 5), origin())
 
             // getBlockDifficulty
-            mstore(196, difficulty())
+            mstore(slotPtr(data_ptr, 6), difficulty())
+            
+            // storageStore
+            sstore(0, address())
+            // storageLoad
+            mstore(slotPtr(data_ptr, 7), sload(0))
+
+             // getGasLeft i64
+            mstore(slotPtr(data_ptr, 8), gas())
+
+            // getBlockHash
+            mstore(slotPtr(data_ptr, 9), blockhash(2))
+
+            // getBlockGasLimit i64
+            mstore(slotPtr(data_ptr, 10), gaslimit())
+
+            // getTxGasPrice
+            mstore(slotPtr(data_ptr, 11), gasprice())
+
+            // getBlockNumber i64
+            mstore(slotPtr(data_ptr, 12), number())
+
+            // getBlockTimestamp i64
+            mstore(slotPtr(data_ptr, 13), timestamp())
+
+            return (data_ptr, slotOffset(14))
+
+
+            // // callDataCopy
+            // calldatacopy(500, 0, calldatasize())
+
+            // return (0, 484)
 
             // // log
             // log0(0, 40)
@@ -34,19 +67,6 @@ object "TestWasm3" {
             // log2(0, 40, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd)
             // log3(0, 40, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa)
             // log4(0, 40, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff9, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6)
-            
-            // storageStore
-            sstore(0, address())
-            // storageLoad
-            mstore(228, mload(0))
-
-             // getGasLeft i64
-            mstore(260, gas())
-
-            // callDataCopy
-            calldatacopy(300, 0, calldatasize())
-
-            return (0, 260)
 
             // codeCopy
 
@@ -57,24 +77,6 @@ object "TestWasm3" {
             // getReturnDataSize
 
             // returnDataCopy
-
-
-            // i64
-
-            // getBlockHash
-            // mstore(136, blockhash(2))
-
-            // getBlockGasLimit i64
-            // let gas_limit := gaslimit()
-
-            // getTxGasPrice
-            // gasprice()
-
-            // getBlockNumber i64
-            // let block_number := number()
-
-            // getBlockTimestamp i64
-            // timestamp()
 
             // call
             // let addr2 := 0xD32298893dD95c1Aaed8A79bc06018b8C265a279
@@ -92,10 +94,18 @@ object "TestWasm3" {
 
 
             // finish
-            return (0, 220)
+            // return (0, 220)
 
             // revert
             // revert(0, 264)
+
+            function slotOffset(count) -> offset {
+                offset := mul(count, 32)
+            }
+
+            function slotPtr(ptr, count) -> _ptr {
+                _ptr := add(ptr, slotOffset(count))
+            }
         }
     }
 

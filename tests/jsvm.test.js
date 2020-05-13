@@ -23,17 +23,18 @@ let c3Abi = [
     { name: 'main', type: 'function', inputs: [], outputs: [
         { name: 'addr', type: 'address' },
         { name: 'caller', type: 'address' },
-        { name: 'addr_balance', type: 'uint16' }, // 16
+        { name: 'addr_balance', type: 'uint16' }, // 16  fix
         { name: 'callvalue', type: 'uint16' },  // 16
         { name: 'calldatasize', type: 'uint8' }, // 8
         { name: 'origin', type: 'address' },  // 20
         { name: 'difficulty', type: 'uint32' }, // 32
-        { name: 'stored_addr', type: 'address' }, // ?addr
-        // {name: 'blockhash', type: 'bytes32'},
-        {name: 'gas_left', type: 'uint'},
-        // {name: 'gas_limit', type: 'uint'},
-        // {name: 'number', type: 'uint'},
-        // {name: 'timestamp', type: 'uint'},
+        { name: 'stored_addr', type: 'address' }, // ?addr  fix
+        { name: 'gas_left', type: 'uint' },
+        { name: 'blockhash', type: 'bytes32' }, // fix
+        { name: 'gaslimit', type: 'uint' },
+        { name: 'gasprice', type: 'uint' },
+        { name: 'number', type: 'uint' }, // fix
+        { name: 'timestamp', type: 'uint' },
     ]},
 ]
 
@@ -56,17 +57,12 @@ const compile = name => new Promise((resolve, reject) => {
     });
 });
 
-beforeAll(() => {
-    return compile('c1').then(c => {
-        contracts['c1'] = c;
-        return;
-    }).then(() => compile('c2')).then(c => {
-        contracts['c2'] = c;
-        return;
-    }).then(() => compile('c3')).then(c => {
-        contracts['c3'] = c;
-        return;
-    })
+beforeAll(async () => {
+    const names = ['c1', 'c2', 'c3'];
+    for (name of names) {
+        contracts[name] = await compile(name);
+    }
+    return;
 });
 
 it('test c1', async function () {
@@ -87,6 +83,20 @@ it('test c3', async function () {
     const runtime = await ewmodule.main();
     const answ = await runtime.main();
     console.log('answ', answ);
+    expect(answ.addr).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
+    expect(answ.caller).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
+    // expect(answ.addr_balance).toBe(22);
+    expect(answ.callvalue).toBe(44);
+    expect(answ.calldatasize).toBe(64);
+    expect(answ.origin).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
+    expect(answ.difficulty).toBe(77);
+    expect(answ.stored_addr).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
+    expect(answ.gas_left).toBe(40);
+    expect(answ.blockhash).toBe(99);
+    expect(answ.gaslimit).toBe(8000000);
+    expect(answ.gasprice).toBe(88);
+    expect(answ.number).toBe(40000);
+    expect(answ.timestamp).toBe(1589188575755);
 });
 
 function parseCompilerOutput(str) {
