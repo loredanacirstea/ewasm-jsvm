@@ -59,7 +59,6 @@ object "TestWasm3" {
             // // callDataCopy
             // calldatacopy(500, 0, calldatasize())
 
-            // return (0, 484)
 
             // // log
             // log0(0, 40)

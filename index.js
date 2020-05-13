@@ -165,8 +165,8 @@ const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, reve
             },
             // result is u128
             getExternalBalance: function (addressOffset_i32ptr, resultOffset_i32ptr) {
+                // TOBEDONE FIXME
                 console.log('getExternalBalance', addressOffset_i32ptr, resultOffset_i32ptr)
-                // FIXME
                 // const size = 16;
                 const size = 32;
                 const balance = new Uint8Array(size);
@@ -186,12 +186,19 @@ const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, reve
                 return newi32(0);
             },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
-            call: function (gas_limit_i64, addressOffset_i32ptr_address, // the memory offset to load the address from (address)
-                valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32) {
+            call: function (
+                gas_limit_i64,
+                addressOffset_i32ptr_address, // the memory offset to load the address from (address)
+                valueOffset_i32ptr_u128,
+                dataOffset_i32ptr_bytes,
+                dataLength_i32,
+            ) {
+                // TOBEDONE NEEDS BR_IF
                 console.log('call', gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32)
                 return newi32(0);
             },
             callDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
+                // TOBEDONE NEEDS BR_IF
                 console.log('callDataCopy', resultOffset_i32ptr_bytes, dataOffset_i32, length_i32)
             },
             // returns i32
@@ -201,18 +208,36 @@ const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, reve
                 return newi32(64);
             },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
-            callCode: function (gas_limit_i64, addressOffset_i32ptr_address, // the memory offset to load the address from (address)
-                valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32) {
+            callCode: function (
+                gas_limit_i64,
+                addressOffset_i32ptr_address, // the memory offset to load the address from (address)
+                valueOffset_i32ptr_u128,
+                dataOffset_i32ptr_bytes,
+                dataLength_i32,
+            ) {
+                // TOBEDONE NEEDS BR_IF
                 console.log('callCode', gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32)
                 return newi32(0);
             },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
-            callDelegate: function (gas_limit_i64, addressOffset_i32ptr_address, dataOffset_i32ptr_bytes, dataLength_i32) {
+            callDelegate: function (
+                gas_limit_i64,
+                addressOffset_i32ptr_address,
+                dataOffset_i32ptr_bytes,
+                dataLength_i32,
+            ) {
+                // TOBEDONE NEEDS BR_IF
                 console.log('callDelegate', gas_limit_i64, addressOffset_i32ptr_address, dataOffset_i32ptr_bytes, dataLength_i32)
                 return newi32(0);
             },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
-            callStatic: function (gas_limit_i64, addressOffset_i32ptr_address, dataOffset_i32ptr_bytes, dataLength_i32) {
+            callStatic: function (
+                gas_limit_i64,
+                addressOffset_i32ptr_address,
+                dataOffset_i32ptr_bytes,
+                dataLength_i32,
+            ) {
+                // TOBEDONE NEEDS BR_IF
                 console.log('callStatic', gas_limit_i64, addressOffset_i32ptr_address, dataOffset_i32ptr_bytes, dataLength_i32)
                 return newi32(0);
             },
@@ -257,7 +282,13 @@ const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, reve
                 storeMemory(runtime, resultOffset_i32ptr_bytes, length_i32)
             },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
-            create: function (valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32, resulltOffset_i32ptr_bytes) {
+            create: function (
+                valueOffset_i32ptr_u128,
+                dataOffset_i32ptr_bytes,
+                dataLength_i32,
+                resulltOffset_i32ptr_bytes,
+            ) {
+                // TOBEDONE
                 console.log('create', valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32, resulltOffset_i32ptr_bytes)
                 return newi32(1);
             },
@@ -270,12 +301,17 @@ const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, reve
                 value[size-1] = 77;
                 storeMemory(value, resulltOffset_i32ptr_u256, size);
             },
-            externalCodeCopy: function (addressOffset_i32ptr_address, // the memory offset to load the address from (address)
-                resultOffset_i32ptr_bytes, codeOffset_i32, dataLength_i32) {
+            externalCodeCopy: function (
+                addressOffset_i32ptr_address, // the memory offset to load the address from (address)
+                resultOffset_i32ptr_bytes,
+                codeOffset_i32, dataLength_i32
+            ) {
+                // TOBEDONE
                 console.log('externalCodeCopy', addressOffset_i32ptr_address, resultOffset_i32ptr_bytes, codeOffset_i32, dataLength_i32)
             },
             // Returns extCodeSize i32
             getExternalCodeSize: function (addressOffset_i32ptr_address) {
+                // TOBEDONE
                 console.log('getExternalCodeSize', addressOffset_i32ptr_address)
                 return newi32(90000);
             },
@@ -299,11 +335,21 @@ const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, reve
                 value[size - 1] = 88;
                 storeMemory(value, resultOffset_i32ptr_u128, size);
             },
-            log: function (dataOffset_i32ptr_bytes, dataLength_i32, numberOfTopics_i32, topic1_i32ptr_bytes32, topic2_i32ptr_bytes32, topic3_i32ptr_bytes32, topic4_i32ptr_bytes32) {
-                console.log('log', dataOffset_i32ptr_bytes, dataLength_i32, numberOfTopics_i32, topic1_i32ptr_bytes32, topic2_i32ptr_bytes32, topic3_i32ptr_bytes32, topic4_i32ptr_bytes32)
+            log: function (
+                dataOffset_i32ptr_bytes,
+                dataLength_i32,
+                numberOfTopics_i32,
+                topic1_i32ptr_bytes32,
+                topic2_i32ptr_bytes32,
+                topic3_i32ptr_bytes32,
+                topic4_i32ptr_bytes32,
+            ) {
+                // TOBEDONE
+                console.log('log', dataOffset_i32ptr_bytes, dataLength_i32, numberOfTopics_i32, topic1_i32ptr_bytes32, topic2_i32ptr_bytes32, topic3_i32ptr_bytes32, topic4_i32ptr_bytes32);
             },
             // result blockNumber i64
             getBlockNumber: function () {
+                // DONE_0
                 console.log('getBlockNumber')
                 return newi64(40000);
             },
@@ -325,6 +371,7 @@ const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, reve
                 finishAction(res);
             },
             revert: function (dataOffset_i32ptr_bytes, dataLength_i32) {
+                // TOBEDONE
                 console.log('revert', dataOffset_i32ptr_bytes, dataLength_i32)
 
                 const res = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
@@ -332,13 +379,16 @@ const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, reve
             },
             // result dataSize i32
             getReturnDataSize: function () {
+                // TOBEDONE
                 console.log('getReturnDataSize')
                 return newi32(64);
             },
             returnDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
+                // TOBEDONE
                 console.log('returnDataCopy', resultOffset_i32ptr_bytes, dataOffset_i32, length_i32)
             },
             selfDestruct: function (addressOffset_i32ptr_address) {
+                // TOBEDONE
                 console.log('selfDestruct', addressOffset_i32ptr_address)
             },
             // result blockTimestamp i64,
