@@ -96,13 +96,23 @@ const initializeWrap =  (wasmbin, wabi)  => {
     let minstance;
 
     const getMemory = () => minstance.exports.memory;
-    const importObj = initializeEthImports(storageMap, wasmbin, getMemory, finishAction, revertAction);
+    const getGas = () => {
+        if (!currentPromise) throw new Error('Get gas for inexistent transaction.');
+        return currentPromise.gas;
+    }
+    const useGas = gas => {
+        if (!currentPromise) throw new Error('Get gas for inexistent transaction.');
+        currentPromise.gas.used += gas;
+    }
+    const importObj = initializeEthImports(storageMap, wasmbin, getMemory, getGas, useGas, finishAction, revertAction);
     minstance = new WebAssembly.Instance(wmodule, importObj);
     
-    const wrappedMain = input => new Promise((resolve, reject) => {
+    const wrappedMain = (...input) => new Promise((resolve, reject) => {
+        if (currentPromise) throw new Error('No queue implemented. Come back later.');
         const fname = wabi.find(abi => abi.name === 'constructor') ? 'constructor' : 'main';
-        currentPromise = {resolve, reject, name: fname};
-        minstance.exports.main(input);
+        const txInfo = input[input.length - 1];
+        currentPromise = {resolve, reject, name: fname, gas: {limit: txInfo.gasLimit, used: 0}};
+        minstance.exports.main(...input.slice(0, input.length - 1));
     });
 
     return {
@@ -111,7 +121,7 @@ const initializeWrap =  (wasmbin, wabi)  => {
     }
 }
 
-const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, revertAction) => {
+const initializeEthImports = (storageMap, wasmbin, getMemory, getGas, useGas, finishAction, revertAction) => {
     const storeMemory = (bytes, offset, size) => {
         console.log('storeMemory: ', logu8a(bytes.slice(0, 100)), offset, size);
 
@@ -145,7 +155,9 @@ const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, reve
         // 31 methods
         ethereum: {
             useGas: function (amount_i64) {
+                // DONE_1
                 console.log('useGas', amount_i64)
+                useGas(amount_i64);
             },
             getAddress: function (resultOffset_i32ptr) {
                 // DONE_0
@@ -317,9 +329,10 @@ const initializeEthImports = (storageMap, wasmbin, getMemory, finishAction, reve
             },
             // result gasLeft i64
             getGasLeft: function () {
-                // DONE_0
+                // DONE_1
                 console.log('getGasLeft')
-                return newi64(40);
+                const gas = getGas();
+                return newi64(gas.limit - gas.used);
             },
             // result blockGasLimit i64
             getBlockGasLimit: function () {

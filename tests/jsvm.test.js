@@ -38,6 +38,9 @@ let c3Abi = [
     ]},
 ]
 
+const DEFAULT_TX_INFO = {
+    gasLimit: 1000000,
+}
 
 const contracts = {};
 
@@ -67,22 +70,21 @@ beforeAll(async () => {
 
 it('test c1', async function () {
     const ewmodule = ewasmjsvm.initialize(contracts.c1.bin, c1Abi);
-    const answ = await ewmodule.main();
+    const answ = await ewmodule.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(999999);
 });
 
 it('test c2', async function () {
     const ewmodule = ewasmjsvm.initialize(contracts.c2.bin, c2Abi);
-    const runtime = await ewmodule.main();
-    const answ = await runtime.main();
+    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    const answ = await runtime.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(999999);
 });
 
 it('test c3', async function () {
     const ewmodule = ewasmjsvm.initialize(contracts.c3.bin, c3Abi);
-    const runtime = await ewmodule.main();
-    const answ = await runtime.main();
-    console.log('answ', answ);
+    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    const answ = await runtime.main(DEFAULT_TX_INFO);
     expect(answ.addr).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
     expect(answ.caller).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
     // expect(answ.addr_balance).toBe(22);
@@ -91,7 +93,7 @@ it('test c3', async function () {
     expect(answ.origin).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
     expect(answ.difficulty).toBe(77);
     expect(answ.stored_addr).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
-    expect(answ.gas_left).toBe(40);
+    expect(answ.gas_left).toBe(DEFAULT_TX_INFO.gasLimit);
     expect(answ.blockhash).toBe(99);
     expect(answ.gaslimit).toBe(8000000);
     expect(answ.gasprice).toBe(88);
