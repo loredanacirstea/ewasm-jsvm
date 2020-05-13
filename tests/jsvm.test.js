@@ -85,14 +85,14 @@ it('test c3', async function () {
     const ewmodule = ewasmjsvm.initialize(contracts.c3.bin, c3Abi);
     const runtime = await ewmodule.main(DEFAULT_TX_INFO);
     const answ = await runtime.main(DEFAULT_TX_INFO);
-    expect(answ.addr).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
+    expect(answ.addr).toBe(runtime.address);
     expect(answ.caller).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
     // expect(answ.addr_balance).toBe(22);
     expect(answ.callvalue).toBe(44);
     expect(answ.calldatasize).toBe(64);
     expect(answ.origin).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
     expect(answ.difficulty).toBe(77);
-    expect(answ.stored_addr).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
+    expect(answ.stored_addr).toBe(runtime.address);
     expect(answ.gas_left).toBe(DEFAULT_TX_INFO.gasLimit);
     expect(answ.blockhash).toBe(99);
     expect(answ.gaslimit).toBe(8000000);

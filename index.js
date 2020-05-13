@@ -1,3 +1,5 @@
+const persistence = require('./persistence.js')();
+
 const isNode = typeof process !== 'undefined'
     && process.versions != null
     && process.versions.node != null;
@@ -68,9 +70,11 @@ const initialize =  (wasmHexSource, wabi)  => {
     return initializeWrap(hexToUint8Array(wasmHexSource), wabi);
 }
 
-const initializeWrap =  (wasmbin, wabi)  => {
+const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
     const storageMap = new WebAssembly.Memory({ initial: 2 }); // Size is in pages.
     const wmodule = new WebAssembly.Module(wasmbin);
+    let address;
+    if (runtime) address = persistence.set(wasmbin);
 
     let currentPromise;
 
@@ -78,7 +82,7 @@ const initializeWrap =  (wasmbin, wabi)  => {
         if (!currentPromise) throw new Error('No queued promise found.');
         if (currentPromise.name === 'constructor') {
             const newabi = wabi.filter(abi => abi.name !== 'constructor');
-            const newmodule = initializeWrap(answ, newabi);
+            const newmodule = initializeWrap(answ, newabi, true);
             currentPromise.resolve(newmodule);
         } else {
             const decoded = decode(answ, wabi.find(abi => abi.name === currentPromise.name));
@@ -95,6 +99,7 @@ const initializeWrap =  (wasmbin, wabi)  => {
 
     let minstance;
 
+    const getAddress = () => address;
     const getMemory = () => minstance.exports.memory;
     const getGas = () => {
         if (!currentPromise) throw new Error('Get gas for inexistent transaction.');
@@ -104,7 +109,16 @@ const initializeWrap =  (wasmbin, wabi)  => {
         if (!currentPromise) throw new Error('Get gas for inexistent transaction.');
         currentPromise.gas.used += gas;
     }
-    const importObj = initializeEthImports(storageMap, wasmbin, getMemory, getGas, useGas, finishAction, revertAction);
+    const importObj = initializeEthImports(
+        storageMap,
+        wasmbin,
+        getAddress,
+        getMemory,
+        getGas,
+        useGas,
+        finishAction,
+        revertAction,
+    );
     minstance = new WebAssembly.Instance(wmodule, importObj);
     
     const wrappedMain = (...input) => new Promise((resolve, reject) => {
@@ -118,10 +132,20 @@ const initializeWrap =  (wasmbin, wabi)  => {
     return {
         instance: minstance,
         main: wrappedMain,
+        address,
     }
 }
 
-const initializeEthImports = (storageMap, wasmbin, getMemory, getGas, useGas, finishAction, revertAction) => {
+const initializeEthImports = (
+    storageMap,
+    wasmbin,
+    getAddress,
+    getMemory,
+    getGas,
+    useGas,
+    finishAction,
+    revertAction,
+) => {
     const storeMemory = (bytes, offset, size) => {
         console.log('storeMemory: ', logu8a(bytes.slice(0, 100)), offset, size);
 
@@ -160,16 +184,13 @@ const initializeEthImports = (storageMap, wasmbin, getMemory, getGas, useGas, fi
                 useGas(amount_i64);
             },
             getAddress: function (resultOffset_i32ptr) {
-                // DONE_0
+                // DONE_1
                 console.log('getAddress', resultOffset_i32ptr)
 
                 // const size = 20;
                 const size = 32;
                 const address = new Uint8Array(size);
-                address.set(hexToUint8Array('0x79F379CebBD362c99Af2765d1fa541415aa78508'), size - 20);
-
-                console.log(logu8a(hexToUint8Array('0x79F379CebBD362c99Af2765d1fa541415aa78508')))
-                console.log(logu8a(address))
+                address.set(hexToUint8Array(getAddress()), size - 20);
 
                 storeMemory(address, resultOffset_i32ptr, size);
 
