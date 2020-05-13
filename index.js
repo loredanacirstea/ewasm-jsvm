@@ -35,6 +35,7 @@ function toByteArray(hexString) {
 
 function hexToUint8Array(hexString) {
     hexString = hexString.slice(0, 2) === '0x' ? hexString.slice(2) : hexString;
+    if (hexString.length % 2 === 1) hexString = '0' + hexString;
     return Uint8Array.from(Buffer.from(hexString, 'hex'));
 }
 
@@ -111,12 +112,14 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
     }
     const getCaller = () => currentPromise.txInfo.from;
     const getOrigin = () => currentPromise.txInfo.origin;
+    const getValue = () => currentPromise.txInfo.value;
     const importObj = initializeEthImports(
         storageMap,
         wasmbin,
         getAddress,
         getCaller,
         getOrigin,
+        getValue,
         getMemory,
         getGas,
         useGas,
@@ -129,7 +132,9 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
         if (currentPromise) throw new Error('No queue implemented. Come back later.');
         const fname = wabi.find(abi => abi.name === 'constructor') ? 'constructor' : 'main';
         const txInfo = input[input.length - 1];
-        if (!txInfo.origin) txInfo.origin = txInfo.from;
+        txInfo.origin = txInfo.origin || txInfo.from;
+        txInfo.value = txInfo.value || 0;
+        
         currentPromise = {resolve, reject, name: fname, txInfo, gas: {limit: txInfo.gasLimit, used: 0}};
         minstance.exports.main(...input.slice(0, input.length - 1));
     });
@@ -147,6 +152,7 @@ const initializeEthImports = (
     getAddress,
     getCaller,
     getOrigin,
+    getValue,
     getMemory,
     getGas,
     useGas,
@@ -304,12 +310,13 @@ const initializeEthImports = (
                 console.log('getCaller', logu8a(loadMemory(resultOffset_i32ptr_address, size)));
             },
             getCallValue: function (resultOffset_i32ptr_u128) {
-                // DONE_0
+                // DONE_1
                 console.log('getCallValue', resultOffset_i32ptr_u128)
                 // const size = 16;
                 const size = 32;
                 const value = new Uint8Array(size);
-                value[size-1] = 44;
+                const tightValue = hexToUint8Array(getValue().toString(16));
+                value.set(tightValue, size - tightValue.length);
                 storeMemory(value, resultOffset_i32ptr_u128, size);
 
                 console.log('getCallValue', logu8a(loadMemory(resultOffset_i32ptr_u128, size)));

@@ -40,6 +40,8 @@ let c3Abi = [
 
 const DEFAULT_TX_INFO = {
     gasLimit: 1000000,
+    from: '0x79f379cebbd362c99af2765d1fa541415aa78509',
+    value: 0,
 }
 
 const contracts = {};
@@ -82,18 +84,19 @@ it('test c2', async function () {
 });
 
 it('test c3', async function () {
+    const tx_info = {...DEFAULT_TX_INFO, value: 1400};
     const ewmodule = ewasmjsvm.initialize(contracts.c3.bin, c3Abi);
-    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
-    const answ = await runtime.main(DEFAULT_TX_INFO);
+    const runtime = await ewmodule.main(tx_info);
+    const answ = await runtime.main(tx_info);
     expect(answ.addr).toBe(runtime.address);
-    expect(answ.caller).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
+    expect(answ.caller).toBe(tx_info.from);
     // expect(answ.addr_balance).toBe(22);
-    expect(answ.callvalue).toBe(44);
+    expect(answ.callvalue).toBe(tx_info.value);
     expect(answ.calldatasize).toBe(64);
-    expect(answ.origin).toBe('0x79f379cebbd362c99af2765d1fa541415aa78508');
+    expect(answ.origin).toBe(tx_info.from);
     expect(answ.difficulty).toBe(77);
     expect(answ.stored_addr).toBe(runtime.address);
-    expect(answ.gas_left).toBe(DEFAULT_TX_INFO.gasLimit);
+    expect(answ.gas_left).toBe(tx_info.gasLimit);
     expect(answ.blockhash).toBe(99);
     expect(answ.gaslimit).toBe(8000000);
     expect(answ.gasprice).toBe(88);
