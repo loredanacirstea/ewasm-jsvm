@@ -1,8 +1,7 @@
-// const sizeMap = {
-//   address: 20,
-//   uint: 32,
-//   bytes32: 32,
-// }
+const isNode = typeof process !== 'undefined'
+    && process.versions != null
+    && process.versions.node != null;
+
 const sizeMap = {
     address: 20,
     uint16: 16,
@@ -11,8 +10,15 @@ const sizeMap = {
     bytes32: 32,
 }
 
-const newi32 = value => new WebAssembly.Global({ value: 'i32', mutable: true }, value);
-const newi64 = value => new WebAssembly.Global({ value: 'i64', mutable: true }, value);
+let newi32, newi64;
+if (isNode) {
+    newi32 = value => value;
+    newi64 = value => BigInt(value);
+} else {
+    newi32 = value => new WebAssembly.Global({ value: 'i32', mutable: true }, value);
+    newi64 = value => new WebAssembly.Global({ value: 'i64', mutable: true }, value);
+}
+
 // const newi64 = value => BigInt64Array.from([6]);
 // const newi64 = value => new BigInt64Array(1);
 // const newi64 = value => new BigInt(value);

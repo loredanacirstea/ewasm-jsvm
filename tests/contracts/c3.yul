@@ -40,7 +40,8 @@ object "TestWasm3" {
             // storageLoad
             mstore(228, mload(0))
 
-            // return (0, 260)
+             // getGasLeft i64
+            mstore(260, gas())
 
             // callDataCopy
             calldatacopy(300, 0, calldatasize())
@@ -62,9 +63,6 @@ object "TestWasm3" {
 
             // getBlockHash
             // mstore(136, blockhash(2))
-
-            // getGasLeft i64
-            // let g := gas()
 
             // getBlockGasLimit i64
             // let gas_limit := gaslimit()

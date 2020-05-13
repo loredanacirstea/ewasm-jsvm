@@ -30,7 +30,7 @@ let c3Abi = [
         { name: 'difficulty', type: 'uint32' }, // 32
         { name: 'stored_addr', type: 'address' }, // ?addr
         // {name: 'blockhash', type: 'bytes32'},
-        // {name: 'gas_left', type: 'uint'},
+        {name: 'gas_left', type: 'uint'},
         // {name: 'gas_limit', type: 'uint'},
         // {name: 'number', type: 'uint'},
         // {name: 'timestamp', type: 'uint'},

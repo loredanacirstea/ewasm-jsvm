@@ -4,7 +4,7 @@
   "description": "\"ewasm virtual machine for javascript\"",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test": "node --experimental-vm-modules --experimental-wasm-bigint node_modules/jest/bin/jest.js"
   },
   "repository": {
     "type": "git",
