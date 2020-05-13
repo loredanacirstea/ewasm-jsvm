@@ -109,10 +109,14 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
         if (!currentPromise) throw new Error('Get gas for inexistent transaction.');
         currentPromise.gas.used += gas;
     }
+    const getCaller = () => currentPromise.txInfo.from;
+    const getOrigin = () => currentPromise.txInfo.origin;
     const importObj = initializeEthImports(
         storageMap,
         wasmbin,
         getAddress,
+        getCaller,
+        getOrigin,
         getMemory,
         getGas,
         useGas,
@@ -125,7 +129,8 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
         if (currentPromise) throw new Error('No queue implemented. Come back later.');
         const fname = wabi.find(abi => abi.name === 'constructor') ? 'constructor' : 'main';
         const txInfo = input[input.length - 1];
-        currentPromise = {resolve, reject, name: fname, gas: {limit: txInfo.gasLimit, used: 0}};
+        if (!txInfo.origin) txInfo.origin = txInfo.from;
+        currentPromise = {resolve, reject, name: fname, txInfo, gas: {limit: txInfo.gasLimit, used: 0}};
         minstance.exports.main(...input.slice(0, input.length - 1));
     });
 
@@ -140,6 +145,8 @@ const initializeEthImports = (
     storageMap,
     wasmbin,
     getAddress,
+    getCaller,
+    getOrigin,
     getMemory,
     getGas,
     useGas,
@@ -285,12 +292,12 @@ const initializeEthImports = (
                 storageLoad(pathOffset_i32ptr_bytes32, resultOffset_i32ptr_bytes32);
             },
             getCaller: function (resultOffset_i32ptr_address) {
-                // DONE_0
+                // DONE_1
                 console.log('getCaller', resultOffset_i32ptr_address)
                 // const size = 20;
                 const size = 32;
                 const address = new Uint8Array(size);
-                address.set(hexToUint8Array('0x79F379CebBD362c99Af2765d1fa541415aa78508'), size - 20);
+                address.set(hexToUint8Array(getCaller()), size - 20);
 
                 storeMemory(address, resultOffset_i32ptr_address, size);
                 
@@ -388,12 +395,12 @@ const initializeEthImports = (
                 return newi64(40000);
             },
             getTxOrigin: function (resultOffset_i32ptr_address) {
-                // DONE_0
+                // DONE_1
                 console.log('getTxOrigin', resultOffset_i32ptr_address)
                 // const size = 20;
                 const size = 32;
                 const address = new Uint8Array(size);
-                address.set(hexToUint8Array('0x79F379CebBD362c99Af2765d1fa541415aa78508'), size - 20);
+                address.set(hexToUint8Array(getOrigin()), size - 20);
 
                 storeMemory(address, resultOffset_i32ptr_address, size);
             },
