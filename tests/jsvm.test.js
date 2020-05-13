@@ -88,20 +88,21 @@ it('test c3', async function () {
     const ewmodule = ewasmjsvm.initialize(contracts.c3.bin, c3Abi);
     const runtime = await ewmodule.main(tx_info);
     const answ = await runtime.main(tx_info);
+    const block = ewasmjsvm.getBlock('latest');
     expect(answ.addr).toBe(runtime.address);
     expect(answ.caller).toBe(tx_info.from);
     // expect(answ.addr_balance).toBe(22);
     expect(answ.callvalue).toBe(tx_info.value);
     expect(answ.calldatasize).toBe(64);
     expect(answ.origin).toBe(tx_info.from);
-    expect(answ.difficulty).toBe(77);
+    expect(answ.difficulty).toBe(block.difficulty);
     expect(answ.stored_addr).toBe(runtime.address);
     expect(answ.gas_left).toBe(tx_info.gasLimit);
-    expect(answ.blockhash).toBe(99);
+    expect(answ.blockhash).toBe(block.hash);
     expect(answ.gaslimit).toBe(8000000);
     expect(answ.gasprice).toBe(88);
-    expect(answ.number).toBe(40000);
-    expect(answ.timestamp).toBe(1589188575755);
+    expect(answ.number).toBe(block.number);
+    expect(answ.timestamp).toBe(block.timestamp);
 });
 
 function parseCompilerOutput(str) {

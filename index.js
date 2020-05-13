@@ -1,4 +1,6 @@
-const persistence = require('./persistence.js')();
+const { persistence: initPersistence, blocks: initBlocks } = require('./persistence.js');
+const persistence = initPersistence();
+const blocks = initBlocks();
 
 const isNode = typeof process !== 'undefined'
     && process.versions != null
@@ -13,6 +15,7 @@ const sizeMap = {
 }
 const typeDecode = {
     address: uint8arr => '0x' + uint8ArrayToHex(uint8arr).substring(24),
+    bytes32: uint8arr => '0x' + uint8ArrayToHex(uint8arr),
     default: uint8arr =>  uint8arr.reverse().reduce((accum, val, i) => accum + val * Math.pow(256, i), 0),
 }
 
@@ -76,6 +79,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
     const wmodule = new WebAssembly.Module(wasmbin);
     let address;
     if (runtime) address = persistence.set(wasmbin);
+    const block = blocks.set();
 
     let currentPromise;
 
@@ -113,6 +117,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
     const getCaller = () => currentPromise.txInfo.from;
     const getOrigin = () => currentPromise.txInfo.origin;
     const getValue = () => currentPromise.txInfo.value;
+    const getBlock = () => block;
     const importObj = initializeEthImports(
         storageMap,
         wasmbin,
@@ -120,6 +125,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
         getCaller,
         getOrigin,
         getValue,
+        getBlock,
         getMemory,
         getGas,
         useGas,
@@ -153,6 +159,7 @@ const initializeEthImports = (
     getCaller,
     getOrigin,
     getValue,
+    getBlock,
     getMemory,
     getGas,
     useGas,
@@ -223,12 +230,11 @@ const initializeEthImports = (
             },
             // result i32 Returns 0 on success and 1 on failure
             getBlockHash: function (number_i64, resultOffset_i32ptr) {
-                // DONE_0
+                // DONE_1
                 console.log('getBlockHash', number_i64, resultOffset_i32ptr)
-                const size = 32;
-                const hash = new Uint8Array(size);
-                hash[size-1] = 99;
-                storeMemory(hash, resultOffset_i32ptr, size);
+   
+                const hash = hexToUint8Array(getBlock().hash);
+                storeMemory(hash, resultOffset_i32ptr, 32);
                 return newi32(0);
             },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
@@ -341,11 +347,13 @@ const initializeEthImports = (
             },
             // returns u256
             getBlockDifficulty: function (resulltOffset_i32ptr_u256) {
-                // DONE_0
+                // DONE_1
                 console.log('getBlockDifficulty', resulltOffset_i32ptr_u256)
                 const size = 32;
                 const value = new Uint8Array(size);
-                value[size-1] = 77;
+                const tightValue = hexToUint8Array(getBlock().difficulty.toString(16));
+                value.set(tightValue, size - tightValue.length);
+                
                 storeMemory(value, resulltOffset_i32ptr_u256, size);
             },
             externalCodeCopy: function (
@@ -371,9 +379,9 @@ const initializeEthImports = (
             },
             // result blockGasLimit i64
             getBlockGasLimit: function () {
-                // DONE_0
+                // DONE_1
                 console.log('getBlockGasLimit')
-                return newi64(8000000);
+                return newi64(getBlock().gasLimit);
             },
             getTxGasPrice: function (resultOffset_i32ptr_u128) {
                 // DONE_0
@@ -397,9 +405,9 @@ const initializeEthImports = (
             },
             // result blockNumber i64
             getBlockNumber: function () {
-                // DONE_0
+                // DONE_1
                 console.log('getBlockNumber')
-                return newi64(40000);
+                return newi64(getBlock().number);
             },
             getTxOrigin: function (resultOffset_i32ptr_address) {
                 // DONE_1
@@ -441,12 +449,14 @@ const initializeEthImports = (
             },
             // result blockTimestamp i64,
             getBlockTimestamp: function () {
-                // DONE_0
+                // DONE_1
                 console.log('getBlockTimestamp')
-                return newi64(1589188575755);
+                return newi64(getBlock().timestamp);
             }
         }
     }
 }
 
-module.exports = {initialize};
+const getBlock = tag => blocks.get(tag);
+
+module.exports = {initialize, getBlock};
