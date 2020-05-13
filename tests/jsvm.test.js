@@ -19,6 +19,7 @@ const c2Abi = [
 ]
 
 let c3Abi = [
+    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
     { name: 'main', type: 'function', inputs: [], outputs: [
         { name: 'addr', type: 'address' },
         { name: 'caller', type: 'address' },
@@ -27,7 +28,7 @@ let c3Abi = [
         { name: 'calldatasize', type: 'uint8' }, // 8
         { name: 'origin', type: 'address' },  // 20
         { name: 'difficulty', type: 'uint32' }, // 32
-        { name: 'stored_addr', type: 'addr' }, // ?addr
+        { name: 'stored_addr', type: 'address' }, // ?addr
         // {name: 'blockhash', type: 'bytes32'},
         // {name: 'gas_left', type: 'uint'},
         // {name: 'gas_limit', type: 'uint'},
@@ -79,6 +80,13 @@ it('test c2', async function () {
     const runtime = await ewmodule.main();
     const answ = await runtime.main();
     expect(answ.val).toBe(999999);
+});
+
+it('test c3', async function () {
+    const ewmodule = ewasmjsvm.initialize(contracts.c3.bin, c3Abi);
+    const runtime = await ewmodule.main();
+    const answ = await runtime.main();
+    console.log('answ', answ);
 });
 
 function parseCompilerOutput(str) {
