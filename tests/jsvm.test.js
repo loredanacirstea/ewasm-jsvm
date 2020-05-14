@@ -23,6 +23,7 @@ let c3Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
     { name: 'main', type: 'function', inputs: [
         { name: 'addr', type: 'address' },
+        { name: 'account', type: 'address' },
     ], outputs: [
         { name: 'addr', type: 'address' },
         { name: 'caller', type: 'address' },
@@ -56,15 +57,30 @@ const c5Abi = [
     { name: 'main', type: 'function', inputs: [], outputs: []},
 ]
 
+const c6Abi = [
+    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
+    { name: 'main', type: 'function', inputs: [{ name: 'addr', type: 'address' }], outputs: [{ name: 'balance', type: 'uint' }]},
+]
+
 const DEFAULT_TX_INFO = {
     gasLimit: 1000000,
     gasPrice: 10,
-    from: '0x79f379cebbd362c99af2765d1fa541415aa78509',
+    from: '0x79f379cebbd362c99af2765d1fa541415aa78508',
     value: 0,
 }
 
 const contracts = {};
 const deployments = {};
+const accounts = [
+    {
+        address: '0x79f379cebbd362c99af2765d1fa541415aa78508',
+        balance: 400000000,
+    },
+    {
+        address: '0xD32298893dD95c1Aaed8A79bc06018b8C265a279',
+        balance: 900000,
+    }
+]
 
 const compile = name => new Promise((resolve, reject) => {
     const command = yulToEwasm(name);
@@ -83,10 +99,21 @@ const compile = name => new Promise((resolve, reject) => {
 });
 
 beforeAll(async () => {
-    const names = ['c1', 'c2', 'c3', 'c4', 'c5'];
+    // Compile contracts
+    const names = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'];
     for (name of names) {
         contracts[name] = await compile(name);
     }
+
+    // Assign balances to accounts
+    accounts.forEach(account => {
+        account.address = account.address.toLowerCase();
+        ewasmjsvm.getPersistence().set(account);
+
+        const entry = ewasmjsvm.getPersistence().get(account.address);
+        expect(entry.balance).toBe(account.balance);
+    });
+    
     return;
 });
 
@@ -120,13 +147,14 @@ it('test c3', async function () {
     deployments.c3 = ewmodule;
     const address2 = deployments.c2.address;
     const runtime = await ewmodule.main(tx_info);
-    const answ = await runtime.main(address2, tx_info);
+    const answ = await runtime.main(address2, accounts[0].address, tx_info);
     const block = ewasmjsvm.getBlock('latest');
+
     expect(answ.addr).toBe(runtime.address);
     expect(answ.caller).toBe(tx_info.from);
-    // expect(answ.addr_balance).toBe(22);
+    // expect(answ.addr_balance).toBe(accounts[0].balance);
     expect(answ.callvalue).toBe(tx_info.value);
-    expect(answ.calldatasize).toBe(32);
+    expect(answ.calldatasize).toBe(64);
     expect(answ.calldata).toBe(address2);
     expect(answ.origin).toBe(tx_info.from);
     expect(answ.difficulty).toBe(block.difficulty);
@@ -192,6 +220,14 @@ it('test c5', async function () {
     // expect(logs[2].topics).toBe([55555554, 55555553]);
     // expect(logs[3].topics).toBe([55555552, 55555551, 55555550]);
     // expect(logs[4].topics).toBe([55555549, 55555548, 55555547, 55555546]);
+});
+
+it('test c6', async function () {
+    const ewmodule = ewasmjsvm.initialize(contracts.c6.bin, c6Abi);
+    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    deployments.c6 = runtime;
+    const answ = await runtime.main(accounts[0].address, DEFAULT_TX_INFO);
+    // expect(answ.balance).toBe(accounts[0].balance);
 });
 
 function parseCompilerOutput(str) {

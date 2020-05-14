@@ -25,7 +25,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
     const storageMap = new WebAssembly.Memory({ initial: 2 }); // Size is in pages.
     const wmodule = new WebAssembly.Module(wasmbin);
     let address;
-    if (runtime) address = persistence.set(wasmbin);
+    if (runtime) address = persistence.set({ runtimeCode: wasmbin });
     const block = blocks.set();
 
     let currentPromise;
@@ -179,10 +179,14 @@ const initializeEthImports = (
             // result is u128
             getExternalBalance: function (addressOffset_i32ptr, resultOffset_i32ptr) {
                 // TOBEDONE FIXME
+
+                let address = loadMemory(addressOffset_i32ptr, 32);
+                address = '0x' + uint8ArrayToHex(address).substring(0, 40);
                 // const size = 16;
                 const size = 32;
                 const balance = new Uint8Array(size);
-                balance[size-1] = 22;
+                const tightValue = hexToUint8Array(persistence.get(address).balance.toString(16));
+                balance.set(tightValue, size - tightValue.length);
                 storeMemory(balance, resultOffset_i32ptr, size);
 
                 console.log('getExternalBalance', logu8a(loadMemory(resultOffset_i32ptr, size)));
@@ -425,5 +429,7 @@ const initializeEthImports = (
 
 const getBlock = tag => blocks.get(tag);
 const getLogs = () => chainlogs;
+// dev purposes:
+const getPersistence = () => persistence;
 
-module.exports = {initialize, getBlock, getLogs};
+module.exports = {initialize, getBlock, getLogs, getPersistence};

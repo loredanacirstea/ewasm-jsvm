@@ -21,7 +21,8 @@ object "TestWasm3" {
             mstore(slotPtr(data_ptr, 1), caller())
 
             // getExternalBalance i32
-            mstore(slotPtr(data_ptr, 2), balance(addr))
+            let account := mload(add(_calldata, 32))
+            mstore(slotPtr(data_ptr, 2), balance(account))
 
             // getCallValue i32
             mstore(slotPtr(data_ptr, 3), callvalue())

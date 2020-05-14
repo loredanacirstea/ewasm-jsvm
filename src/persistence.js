@@ -9,20 +9,26 @@ const randomHex = (size) => {
 }
 
 const persistence = () => {
-    const contracts = {};
+    const accounts = {};
 
-    const get = address => contracts[address];
+    const get = address => accounts[address];
 
-    const set = (runtimeCode) => {
+    const set = ({ address, runtimeCode, balance = 0 }) => {
         // pathToWasm ?
-        const address = randomHex(40);
-        contracts[address] = { runtimeCode };
+        address = address || randomHex(40);
+        runtimeCode = runtimeCode || new Uint8Array(0);
+        accounts[address] = { runtimeCode, balance };
         return address;
+    }
+
+    const updateBalance = (address, total) => {
+        accounts[address].balance = total;
     }
 
     return {
         get,
         set,
+        updateBalance,
     }
 }
 
