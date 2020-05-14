@@ -14,10 +14,13 @@ const typeDecode = {
     bytes32: uint8arr => '0x' + uint8ArrayToHex(uint8arr),
     default: uint8arr =>  uint8arr.reverse().reduce((accum, val, i) => accum + val * Math.pow(256, i), 0),
 }
+
+const leftPadEnc = (value, size) => value.toString(16).padStart(size * 2, '0');
 const typeEncode = {
-    uint: value => value.toString(16),
-    int: value => value.toString(16),
-    default: value => value,
+    uint: leftPadEnc,
+    int: leftPadEnc,
+    address: (value, size) => value.padStart(size * 2, '0'),
+    bytes32: (value, size) => value.padEnd(size * 2, '0'),
 }
 
 const strip0x = hexString => {
@@ -58,8 +61,7 @@ const encode = (args, types) => {
     }
     const encoded = types.map((typedef, i) => {
         const size = 32;
-        return strip0x((typeEncode[typedef.type] || typeEncode.default)(args[i]))
-            .padStart(size * 2, '0');
+        return typeEncode[typedef.type](strip0x(args[i]), size)
     });
     return hexToUint8Array(encoded.join(''));
 }

@@ -13,7 +13,7 @@ const persistence = () => {
 
     const get = address => contracts[address];
 
-    const set = (runtimeCode ) => {
+    const set = (runtimeCode) => {
         // pathToWasm ?
         const address = randomHex(40);
         contracts[address] = { runtimeCode };

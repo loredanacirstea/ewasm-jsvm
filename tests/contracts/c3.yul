@@ -64,12 +64,17 @@ object "TestWasm3" {
             // getCodeSize
             mstore(slotPtr(data_ptr, 15), codesize())
 
-            mstore(slotPtr(data_ptr, 16), mload(_calldata))
+            let addr2 := mload(_calldata)
             
-            return (data_ptr, slotOffset(17))
+            mstore(slotPtr(data_ptr, 16), addr2)
 
+            // getExternalCodeSize i32
+            mstore(slotPtr(data_ptr, 17), extcodesize(addr2))
 
-
+            // externalCodeCopy
+            extcodecopy(addr2, slotPtr(data_ptr, 18), 32, 32)
+            
+            return (data_ptr, slotOffset(19))
 
             // // log
             // log0(0, 40)
@@ -78,12 +83,7 @@ object "TestWasm3" {
             // log3(0, 40, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa)
             // log4(0, 40, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff9, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6)
 
-            // codeCopy
-
-            // externalCodeCopy
-
-            // getExternalCodeSize i32
-
+            
             // getReturnDataSize
 
             // returnDataCopy

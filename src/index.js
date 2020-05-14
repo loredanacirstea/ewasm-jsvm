@@ -62,6 +62,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
     const getBlock = () => block;
     const getCalldata = () => currentPromise.calldata;
     const importObj = initializeEthImports(
+        persistence,
         storageMap,
         wasmbin,
         getCalldata,
@@ -109,6 +110,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
 }
 
 const initializeEthImports = (
+    persistence,
     storageMap,
     wasmbin,
     getCalldata,
@@ -339,16 +341,25 @@ const initializeEthImports = (
             externalCodeCopy: function (
                 addressOffset_i32ptr_address, // the memory offset to load the address from (address)
                 resultOffset_i32ptr_bytes,
-                codeOffset_i32, dataLength_i32
+                codeOffset_i32,
+                dataLength_i32,
             ) {
-                // TOBEDONE
-                console.log('externalCodeCopy', addressOffset_i32ptr_address, resultOffset_i32ptr_bytes, codeOffset_i32, dataLength_i32)
+                // DONE_1
+                console.log('externalCodeCopy', addressOffset_i32ptr_address, resultOffset_i32ptr_bytes, codeOffset_i32, dataLength_i32);
+
+                let address = loadMemory(addressOffset_i32ptr_address, 32);
+                address = '0x' + uint8ArrayToHex(address).substring(0, 40);
+                const codeSlice = persistence.get(address).runtimeCode.slice(codeOffset_i32, codeOffset_i32 + dataLength_i32);
+                storeMemory(codeSlice, resultOffset_i32ptr_bytes, dataLength_i32);
             },
             // Returns extCodeSize i32
             getExternalCodeSize: function (addressOffset_i32ptr_address) {
-                // TOBEDONE
+                // DONE_1
                 console.log('getExternalCodeSize', addressOffset_i32ptr_address)
-                return newi32(90000);
+                
+                let address = loadMemory(addressOffset_i32ptr_address, 32);
+                address = '0x' + uint8ArrayToHex(address).substring(0, 40);
+                return newi32(persistence.get(address).runtimeCode.length);
             },
             // result gasLeft i64
             getGasLeft: function () {

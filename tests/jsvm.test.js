@@ -41,6 +41,8 @@ let c3Abi = [
         { name: 'coinbase', type: 'address' },
         { name: 'codesize', type: 'uint' },
         { name: 'calldata', type: 'address' },
+        { name: 'extcodesize', type: 'uint' },
+        { name: 'extcodecopy', type: 'bytes32' },
     ]},
 ]
 
@@ -132,6 +134,8 @@ it('test c3', async function () {
     expect(answ.timestamp).toBe(block.timestamp);
     expect(answ.coinbase).toBe(block.coinbase);
     expect(answ.codesize).toBe(runtime.bin.length);
+    expect(answ.extcodesize).toBe(deployments.c2.bin.length);
+    expect(answ.extcodecopy).toBe('0x' + utils.uint8ArrayToHex(deployments.c2.bin.slice(32, 64)));
 });
 
 it('test c4', async function () {
