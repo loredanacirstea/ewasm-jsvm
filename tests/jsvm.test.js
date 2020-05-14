@@ -20,7 +20,9 @@ const c2Abi = [
 
 let c3Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'function', inputs: [], outputs: [
+    { name: 'main', type: 'function', inputs: [
+        { name: 'addr', type: 'address' },
+    ], outputs: [
         { name: 'addr', type: 'address' },
         { name: 'caller', type: 'address' },
         { name: 'addr_balance', type: 'uint16' }, // 16  fix
@@ -37,6 +39,7 @@ let c3Abi = [
         { name: 'timestamp', type: 'uint' },
         { name: 'coinbase', type: 'address' },
         { name: 'codesize', type: 'uint' },
+        { name: 'calldata', type: 'address' },
     ]},
 ]
 
@@ -48,6 +51,7 @@ const DEFAULT_TX_INFO = {
 }
 
 const contracts = {};
+const deployments = {};
 
 const compile = name => new Promise((resolve, reject) => {
     const command = yulToEwasm(name);
@@ -75,6 +79,7 @@ beforeAll(async () => {
 
 it('test c1', async function () {
     const ewmodule = ewasmjsvm.initialize(contracts.c1.bin, c1Abi);
+    deployments.c1 = ewmodule;
     const answ = await ewmodule.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(999999);
 });
@@ -82,6 +87,7 @@ it('test c1', async function () {
 it('test c2', async function () {
     const ewmodule = ewasmjsvm.initialize(contracts.c2.bin, c2Abi);
     const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    deployments.c2 = runtime;
     const answ = await runtime.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(999999);
 });
@@ -89,14 +95,17 @@ it('test c2', async function () {
 it('test c3', async function () {
     const tx_info = {...DEFAULT_TX_INFO, value: 1400};
     const ewmodule = ewasmjsvm.initialize(contracts.c3.bin, c3Abi);
+    deployments.c3 = ewmodule;
+    const address2 = deployments.c2.address;
     const runtime = await ewmodule.main(tx_info);
-    const answ = await runtime.main(tx_info);
+    const answ = await runtime.main(address2, tx_info);
     const block = ewasmjsvm.getBlock('latest');
     expect(answ.addr).toBe(runtime.address);
     expect(answ.caller).toBe(tx_info.from);
     // expect(answ.addr_balance).toBe(22);
     expect(answ.callvalue).toBe(tx_info.value);
-    expect(answ.calldatasize).toBe(64);
+    expect(answ.calldatasize).toBe(32);
+    expect(answ.calldata).toBe(address2);
     expect(answ.origin).toBe(tx_info.from);
     expect(answ.difficulty).toBe(block.difficulty);
     expect(answ.stored_addr).toBe(runtime.address);

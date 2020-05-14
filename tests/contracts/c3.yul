@@ -1,12 +1,17 @@
 object "TestWasm3" {
     code {
+        // codeCopy
         datacopy(0, dataoffset("Runtime"), datasize("Runtime"))
         return(0, datasize("Runtime"))
     }
     object "Runtime" {
         code {
 
-            let data_ptr := 512
+            let _calldata := 512
+            let data_ptr := 1024
+
+            // callDataCopy
+            calldatacopy(_calldata, 0, calldatasize())
 
             // getAddress
             let addr := address()
@@ -58,13 +63,12 @@ object "TestWasm3" {
 
             // getCodeSize
             mstore(slotPtr(data_ptr, 15), codesize())
+
+            mstore(slotPtr(data_ptr, 16), mload(_calldata))
             
+            return (data_ptr, slotOffset(17))
 
-            return (data_ptr, slotOffset(16))
 
-
-            // // callDataCopy
-            // calldatacopy(500, 0, calldatasize())
 
 
             // // log
@@ -111,6 +115,10 @@ object "TestWasm3" {
 
             function slotPtr(ptr, count) -> _ptr {
                 _ptr := add(ptr, slotOffset(count))
+            }
+
+            function mslice(position, length) -> result {
+                result := div(mload(position), exp(2, sub(256, mul(length, 8))))
             }
         }
     }

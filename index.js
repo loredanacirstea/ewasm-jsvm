@@ -18,6 +18,11 @@ const typeDecode = {
     bytes32: uint8arr => '0x' + uint8ArrayToHex(uint8arr),
     default: uint8arr =>  uint8arr.reverse().reduce((accum, val, i) => accum + val * Math.pow(256, i), 0),
 }
+const typeEncode = {
+    uint: value => value.toString(16),
+    int: value => value.toString(16),
+    default: value => value,
+}
 
 let newi32, newi64;
 if (isNode) {
@@ -26,6 +31,10 @@ if (isNode) {
 } else {
     newi32 = value => new WebAssembly.Global({ value: 'i32', mutable: true }, value);
     newi64 = value => new WebAssembly.Global({ value: 'i64', mutable: true }, value);
+}
+
+function strip0x(hexString) {
+    return hexString.slice(0, 2) === '0x' ? hexString.slice(2) : hexString;
 }
 
 function toByteArray(hexString) {
@@ -37,7 +46,7 @@ function toByteArray(hexString) {
 }
 
 function hexToUint8Array(hexString) {
-    hexString = hexString.slice(0, 2) === '0x' ? hexString.slice(2) : hexString;
+    hexString = strip0x(hexString);
     if (hexString.length % 2 === 1) hexString = '0' + hexString;
     return Uint8Array.from(Buffer.from(hexString, 'hex'));
 }
@@ -66,8 +75,16 @@ const decode = (uint8arr, funcabi) => {
     });
     return result;
 }
-const encode = hex => {
-
+const encode = (args, types) => {
+    if (args.length !== types.length) {
+        throw new Error('Values and types do not have the same length.')
+    }
+    const encoded = types.map((typedef, i) => {
+        const size = 32;
+        return strip0x((typeEncode[typedef.type] || typeEncode.default)(args[i]))
+            .padStart(size * 2, '0');
+    });
+    return hexToUint8Array(encoded.join(''));
 }
 
 const initialize =  (wasmHexSource, wabi)  => {
@@ -118,9 +135,11 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
     const getOrigin = () => currentPromise.txInfo.origin;
     const getValue = () => currentPromise.txInfo.value;
     const getBlock = () => block;
+    const getCalldata = () => currentPromise.calldata;
     const importObj = initializeEthImports(
         storageMap,
         wasmbin,
+        getCalldata,
         getAddress,
         getCaller,
         getOrigin,
@@ -136,13 +155,23 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
     
     const wrappedMain = (...input) => new Promise((resolve, reject) => {
         if (currentPromise) throw new Error('No queue implemented. Come back later.');
-        const fname = wabi.find(abi => abi.name === 'constructor') ? 'constructor' : 'main';
+        
+        const fname = runtime ? 'main' : (wabi.find(abi => abi.name === 'constructor') ? 'constructor' : 'main');
+        const args = input.slice(0, input.length - 1);
         const txInfo = input[input.length - 1];
         txInfo.origin = txInfo.origin || txInfo.from;
         txInfo.value = txInfo.value || 0;
-        
-        currentPromise = {resolve, reject, name: fname, txInfo, gas: {limit: txInfo.gasLimit, price: txInfo.gasPrice, used: 0}};
-        minstance.exports.main(...input.slice(0, input.length - 1));
+
+        const calldataTypes = (wabi.find(abi => abi.name === fname) || {}).inputs;
+        currentPromise = {
+            resolve,
+            reject,
+            name: fname,
+            txInfo,
+            gas: {limit: txInfo.gasLimit, price: txInfo.gasPrice, used: 0},
+            calldata: encode(args, calldataTypes),
+        };
+        minstance.exports.main(...args);
     });
 
     return {
@@ -157,6 +186,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
 const initializeEthImports = (
     storageMap,
     wasmbin,
+    getCalldata,
     getAddress,
     getCaller,
     getOrigin,
@@ -176,7 +206,6 @@ const initializeEthImports = (
         for (let i = 0; i < size; i++) {
             mem[offset + i] = bytes[i];
         }
-        console.log('storeMemory2: ', logu8a(mem.slice(offset, offset+size)));
     }
     const loadMemory = (offset, size) => {
         let res = getMemory().buffer.slice(offset, offset + size)
@@ -252,14 +281,21 @@ const initializeEthImports = (
                 return newi32(0);
             },
             callDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
-                // TOBEDONE NEEDS BR_IF
+                // DONE_1
                 console.log('callDataCopy', resultOffset_i32ptr_bytes, dataOffset_i32, length_i32)
+                
+                storeMemory(
+                    getCalldata()
+                        .slice(dataOffset_i32, dataOffset_i32 + length_i32),
+                    resultOffset_i32ptr_bytes,
+                    length_i32,
+                );
             },
             // returns i32
             getCallDataSize: function () {
-                // DONE_0
+                // DONE_1
                 console.log('getCallDataSize')
-                return newi32(64);
+                return newi32(getCalldata().length);
             },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
             callCode: function (
