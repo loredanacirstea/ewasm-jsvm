@@ -21,6 +21,11 @@ const persistence = () => {
         return address;
     }
 
+    const remove = address => {
+        if (accounts[address].balance > 0) throw new Error('Contract removal failed, because it still has money.');
+        delete accounts[address];
+    }
+
     const updateBalance = (address, total) => {
         accounts[address].balance = total;
     }
@@ -29,6 +34,7 @@ const persistence = () => {
         get,
         set,
         updateBalance,
+        remove,
     }
 }
 

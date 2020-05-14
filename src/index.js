@@ -30,11 +30,25 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
 
     let currentPromise;
 
+    const transferValue = (from, to, value) => {
+        const fromBalance = persistence.get(from).balance;
+        if (fromBalance < value) throw new Error('Not enough balance.');
+        
+        const toBalance = persistence.get(to).balance;
+        persistence.updateBalance(to, toBalance + value);
+        persistence.updateBalance(from, fromBalance - value);
+    }
+
     const finishAction = answ => {
         if (!currentPromise) throw new Error('No queued promise found.');
         if (currentPromise.name === 'constructor') {
             const newabi = wabi.filter(abi => abi.name !== 'constructor');
             const newmodule = initializeWrap(answ, newabi, true);
+            transferValue(
+                currentPromise.txInfo.from,
+                newmodule.address,
+                currentPromise.txInfo.value,
+            )
             currentPromise.resolve(newmodule);
         } else {
             const decoded = decode(answ, wabi.find(abi => abi.name === currentPromise.name).outputs);
@@ -82,6 +96,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
         useGas,
         finishAction,
         revertAction,
+        transferValue,
     );
     minstance = new WebAssembly.Instance(wmodule, importObj);
     
@@ -131,6 +146,7 @@ const initializeEthImports = (
     useGas,
     finishAction,
     revertAction,
+    transferValue,
 ) => {
     const storeMemory = (bytes, offset, size) => {
         // console.log('storeMemory: ', logu8a(bytes.slice(0, 100)), offset, size);
@@ -309,11 +325,22 @@ const initializeEthImports = (
                 valueOffset_i32ptr_u128,
                 dataOffset_i32ptr_bytes,
                 dataLength_i32,
-                resulltOffset_i32ptr_bytes,
+                resultOffset_i32ptr_bytes,
             ) {
                 // TOBEDONE
-                console.log('create', valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32, resulltOffset_i32ptr_bytes)
-                return newi32(1);
+                console.log('create', valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32, resultOffset_i32ptr_bytes)
+
+                const balance = parseInt(uint8ArrayToHex(loadMemory(valueOffset_i32ptr_u128, 32)), 16);
+                const runtimeCode = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                const address = persistence.set({ runtimeCode, balance });
+
+                const size = 32;
+                const addrBytes = new Uint8Array(size);
+                const tightValue = hexToUint8Array(address);
+                addrBytes.set(tightValue, size - tightValue.length);
+                storeMemory(addrBytes, resultOffset_i32ptr_bytes, size);
+
+                return newi32(0);
             },
             // returns u256
             getBlockDifficulty: function (resulltOffset_i32ptr_u256) {
@@ -415,8 +442,18 @@ const initializeEthImports = (
                 console.log('returnDataCopy', resultOffset_i32ptr_bytes, dataOffset_i32, length_i32)
             },
             selfDestruct: function (addressOffset_i32ptr_address) {
-                // TOBEDONE
-                console.log('selfDestruct', addressOffset_i32ptr_address)
+                // DONE_1
+                let toAddress = loadMemory(addressOffset_i32ptr_address, 32);
+                toAddress = '0x' + uint8ArrayToHex(toAddress).substring(0, 40);
+
+                const fromAddress = getAddress();
+                transferValue(
+                    fromAddress,
+                    toAddress,
+                    persistence.get(fromAddress).balance,
+                );
+                persistence.remove(fromAddress);
+                finishAction();
             },
             // result blockTimestamp i64,
             getBlockTimestamp: function () {

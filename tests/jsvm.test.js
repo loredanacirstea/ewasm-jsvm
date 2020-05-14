@@ -62,6 +62,16 @@ const c6Abi = [
     { name: 'main', type: 'function', inputs: [{ name: 'addr', type: 'address' }], outputs: [{ name: 'balance', type: 'uint' }]},
 ]
 
+const c7Abi = [
+    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
+    { name: 'main', type: 'function', inputs: [], outputs: [{ name: 'addr', type: 'address' }]},
+]
+
+const c8Abi = [
+    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
+    { name: 'main', type: 'function', inputs: [], outputs: []},
+]
+
 const DEFAULT_TX_INFO = {
     gasLimit: 1000000,
     gasPrice: 10,
@@ -100,7 +110,7 @@ const compile = name => new Promise((resolve, reject) => {
 
 beforeAll(async () => {
     // Compile contracts
-    const names = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'];
+    const names = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8'];
     for (name of names) {
         contracts[name] = await compile(name);
     }
@@ -141,12 +151,19 @@ it('test c2', async function () {
     expect(answ.val).toBe(999999);
 });
 
-it('test c3', async function () {
+it('test c3 multi', async function () {
     const tx_info = {...DEFAULT_TX_INFO, value: 1400};
+    let fromBalance = ewasmjsvm.getPersistence().get(tx_info.from).balance;
+    
     const ewmodule = ewasmjsvm.initialize(contracts.c3.bin, c3Abi);
     deployments.c3 = ewmodule;
     const address2 = deployments.c2.address;
     const runtime = await ewmodule.main(tx_info);
+    
+    fromBalance -= tx_info.value;
+    expect(ewasmjsvm.getPersistence().get(tx_info.from).balance).toBe(fromBalance);
+    expect(ewasmjsvm.getPersistence().get(runtime.address).balance).toBe(tx_info.value);
+    
     const answ = await runtime.main(address2, accounts[0].address, tx_info);
     const block = ewasmjsvm.getBlock('latest');
 
@@ -171,7 +188,7 @@ it('test c3', async function () {
     expect(answ.extcodecopy).toBe('0x' + utils.uint8ArrayToHex(deployments.c2.bin.slice(32, 64)));
 });
 
-it('test c4', async function () {
+it('test c4 revert', async function () {
     const ewmodule = ewasmjsvm.initialize(contracts.c4.bin, c4Abi);
     const runtime = await ewmodule.main(DEFAULT_TX_INFO);
     deployments.c4 = runtime;
@@ -182,7 +199,7 @@ it('test c4', async function () {
     // }).rejects.toThrow(/Revert: 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/);
 });
 
-it('test c5', async function () {
+it('test c5 logs', async function () {
     const ewmodule = ewasmjsvm.initialize(contracts.c5.bin, c5Abi);
     const runtime = await ewmodule.main(DEFAULT_TX_INFO);
     deployments.c5 = runtime;
@@ -222,12 +239,48 @@ it('test c5', async function () {
     // expect(logs[4].topics).toBe([55555549, 55555548, 55555547, 55555546]);
 });
 
-it('test c6', async function () {
+it('test c6 getExternalBalance', async function () {
     const ewmodule = ewasmjsvm.initialize(contracts.c6.bin, c6Abi);
     const runtime = await ewmodule.main(DEFAULT_TX_INFO);
     deployments.c6 = runtime;
     const answ = await runtime.main(accounts[0].address, DEFAULT_TX_INFO);
     // expect(answ.balance).toBe(accounts[0].balance);
+});
+
+it('test c7 - create', async function () {
+    const tx_info = {...DEFAULT_TX_INFO, value: 1400};
+    const ewmodule = ewasmjsvm.initialize(contracts.c7.bin, c7Abi);
+    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    deployments.c7 = runtime;
+    const { addr } = await runtime.main(tx_info);
+    
+    const createdContract = ewasmjsvm.getPersistence().get(addr);
+    expect(createdContract.balance).toBe(tx_info.value);
+    expect(createdContract.runtimeCode).not.toBeNull();
+
+    // TODO fixme
+    // const cinstance = ewasmjsvm.initialize(createdContract.runtimeCode, c2Abi[1])
+    // const answ = await cinstance.main();
+    // expect(answ.val).toBe(999999);
+});
+
+it('test c8 selfDestruct', async function () {
+    const tx_info = {...DEFAULT_TX_INFO, value: 800000};
+    let fromBalance = ewasmjsvm.getPersistence().get(tx_info.from).balance;
+    
+    const ewmodule = ewasmjsvm.initialize(contracts.c8.bin, c8Abi);
+    const runtime = await ewmodule.main(tx_info);
+    deployments.c8 = runtime;
+
+    fromBalance -= tx_info.value;
+    expect(ewasmjsvm.getPersistence().get(tx_info.from).balance).toBe(fromBalance);
+    expect(ewasmjsvm.getPersistence().get(runtime.address).balance).toBe(tx_info.value);
+    
+    await runtime.main(DEFAULT_TX_INFO);
+
+    fromBalance += tx_info.value;
+    expect(ewasmjsvm.getPersistence().get(tx_info.from).balance).toBe(fromBalance);
+    expect(ewasmjsvm.getPersistence().get(runtime.address)).toBeUndefined();
 });
 
 function parseCompilerOutput(str) {
