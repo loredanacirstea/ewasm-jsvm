@@ -2,7 +2,8 @@ const fs = require('fs');
 const { exec } = require("child_process");
 const solc = require('solc');
 const assert = require('assert');
-const ewasmjsvm = require('../index.js');
+const ewasmjsvm = require('../src/index.js');
+const utils = require('../src/utils.js');
 
 const C_PATH = './tests/contracts';
 const solToYul = name => `solc --ir -o ./build ${name}.sol --overwrite`;
@@ -75,6 +76,15 @@ beforeAll(async () => {
         contracts[name] = await compile(name);
     }
     return;
+});
+
+it('test utils', async function () {
+    let a;
+    a = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+    expect('0x' + utils.uint8ArrayToHex(utils.hexToUint8Array(a))).toBe(a);
+    
+    a = '0x04Ca854d2003eC7D7f977F947a4935733D2A8181';
+    expect('0x' + utils.uint8ArrayToHex(utils.hexToUint8Array(a))).toBe(a.toLowerCase());
 });
 
 it('test c1', async function () {
