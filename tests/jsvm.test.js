@@ -44,6 +44,11 @@ let c3Abi = [
     ]},
 ]
 
+const c4Abi = [
+    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
+    { name: 'main', type: 'function', inputs: [], outputs: [{ name: 'val', type: 'uint32' }]},
+]
+
 const DEFAULT_TX_INFO = {
     gasLimit: 1000000,
     gasPrice: 10,
@@ -71,7 +76,7 @@ const compile = name => new Promise((resolve, reject) => {
 });
 
 beforeAll(async () => {
-    const names = ['c1', 'c2', 'c3'];
+    const names = ['c1', 'c2', 'c3', 'c4'];
     for (name of names) {
         contracts[name] = await compile(name);
     }
@@ -127,6 +132,17 @@ it('test c3', async function () {
     expect(answ.timestamp).toBe(block.timestamp);
     expect(answ.coinbase).toBe(block.coinbase);
     expect(answ.codesize).toBe(runtime.bin.length);
+});
+
+it('test c4', async function () {
+    const ewmodule = ewasmjsvm.initialize(contracts.c4.bin, c4Abi);
+    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    deployments.c4 = runtime;
+
+    await expect(() => {
+        return runtime.main(DEFAULT_TX_INFO);
+    }).rejects.toThrow(/revert/i);
+    // }).rejects.toThrow(/Revert: 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/);
 });
 
 function parseCompilerOutput(str) {

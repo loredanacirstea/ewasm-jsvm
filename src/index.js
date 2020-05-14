@@ -408,7 +408,7 @@ const initializeEthImports = (
                 finishAction(res);
             },
             revert: function (dataOffset_i32ptr_bytes, dataLength_i32) {
-                // TOBEDONE
+                // DONE_1
                 console.log('revert', dataOffset_i32ptr_bytes, dataLength_i32)
 
                 const res = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
