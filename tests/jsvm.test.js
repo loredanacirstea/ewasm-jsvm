@@ -35,11 +35,14 @@ let c3Abi = [
         { name: 'gasprice', type: 'uint' },
         { name: 'number', type: 'uint' }, // fix
         { name: 'timestamp', type: 'uint' },
+        { name: 'coinbase', type: 'address' },
+        { name: 'codesize', type: 'uint' },
     ]},
 ]
 
 const DEFAULT_TX_INFO = {
     gasLimit: 1000000,
+    gasPrice: 10,
     from: '0x79f379cebbd362c99af2765d1fa541415aa78509',
     value: 0,
 }
@@ -100,9 +103,11 @@ it('test c3', async function () {
     expect(answ.gas_left).toBe(tx_info.gasLimit);
     expect(answ.blockhash).toBe(block.hash);
     expect(answ.gaslimit).toBe(8000000);
-    expect(answ.gasprice).toBe(88);
+    expect(answ.gasprice).toBe(tx_info.gasPrice);
     expect(answ.number).toBe(block.number);
     expect(answ.timestamp).toBe(block.timestamp);
+    expect(answ.coinbase).toBe(block.coinbase);
+    expect(answ.codesize).toBe(runtime.bin.length);
 });
 
 function parseCompilerOutput(str) {

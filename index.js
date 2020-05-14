@@ -141,7 +141,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
         txInfo.origin = txInfo.origin || txInfo.from;
         txInfo.value = txInfo.value || 0;
         
-        currentPromise = {resolve, reject, name: fname, txInfo, gas: {limit: txInfo.gasLimit, used: 0}};
+        currentPromise = {resolve, reject, name: fname, txInfo, gas: {limit: txInfo.gasLimit, price: txInfo.gasPrice, used: 0}};
         minstance.exports.main(...input.slice(0, input.length - 1));
     });
 
@@ -149,6 +149,8 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
         instance: minstance,
         main: wrappedMain,
         address,
+        abi: wabi,
+        bin: wasmbin,
     }
 }
 
@@ -196,7 +198,7 @@ const initializeEthImports = (
 
     return {
         // i32ptr is u128
-        // 31 methods
+        // 33 methods
         ethereum: {
             useGas: function (amount_i64) {
                 // DONE_1
@@ -334,6 +336,23 @@ const initializeEthImports = (
                 const runtime = wasmbin.slice(codeOffset_i32, codeOffset_i32 + length_i32)
                 storeMemory(runtime, resultOffset_i32ptr_bytes, length_i32)
             },
+            // returns i32 - code size current env
+            getCodeSize: function() {
+                // DONE_1
+                console.log('getCodeSize');
+                return newi32(wasmbin.length);
+            },
+            // block’s beneficiary address
+            getBlockCoinbase: function(resultOffset_i32ptr_address) {
+                // DONE_1
+                console.log('getBlockCoinbase', resultOffset_i32ptr_address)
+                const size = 32;
+                const value = new Uint8Array(size);
+                const tightValue = hexToUint8Array(getBlock().coinbase);
+                value.set(tightValue, size - tightValue.length);
+                
+                storeMemory(value, resultOffset_i32ptr_address, size);
+            },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
             create: function (
                 valueOffset_i32ptr_u128,
@@ -384,11 +403,12 @@ const initializeEthImports = (
                 return newi64(getBlock().gasLimit);
             },
             getTxGasPrice: function (resultOffset_i32ptr_u128) {
-                // DONE_0
+                // DONE_1
                 console.log('getTxGasPrice', resultOffset_i32ptr_u128)
                 const size = 32;
                 const value = new Uint8Array(size);
-                value[size - 1] = 88;
+                const tightValue = hexToUint8Array(getGas().price.toString(16));
+                value.set(tightValue, size - tightValue.length);
                 storeMemory(value, resultOffset_i32ptr_u128, size);
             },
             log: function (

@@ -39,6 +39,7 @@ const blocks = () => {
             hash: randomHex(64),
             difficulty: 2307651677621404,
             gasLimit: 8000000,
+            coinbase: randomHex(40),
         }
         blocks.push(block);
         blocksByHash[block.hash] = count;

@@ -53,7 +53,14 @@ object "TestWasm3" {
             // getBlockTimestamp i64
             mstore(slotPtr(data_ptr, 13), timestamp())
 
-            return (data_ptr, slotOffset(14))
+            // getBlockCoinbase address
+            mstore(slotPtr(data_ptr, 14), coinbase())
+
+            // getCodeSize
+            mstore(slotPtr(data_ptr, 15), codesize())
+            
+
+            return (data_ptr, slotOffset(16))
 
 
             // // callDataCopy
