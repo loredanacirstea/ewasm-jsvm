@@ -21,6 +21,7 @@ const typeEncode = {
     int: leftPadEnc,
     address: (value, size) => value.padStart(size * 2, '0'),
     bytes32: (value, size) => value.padEnd(size * 2, '0'),
+    bytes: value => value,
 }
 
 const strip0x = hexString => {

@@ -327,10 +327,10 @@ const initializeEthImports = (
                 dataLength_i32,
                 resultOffset_i32ptr_bytes,
             ) {
-                // TOBEDONE
-                console.log('create', valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32, resultOffset_i32ptr_bytes)
-
-                const balance = parseInt(uint8ArrayToHex(loadMemory(valueOffset_i32ptr_u128, 32)), 16);
+                // DONE_1
+                const balance = parseInt(uint8ArrayToHex(
+                    loadMemory(valueOffset_i32ptr_u128, 32)
+                ), 16);
                 const runtimeCode = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
                 const address = persistence.set({ runtimeCode, balance });
 

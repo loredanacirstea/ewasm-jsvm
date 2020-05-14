@@ -67,6 +67,11 @@ const c7Abi = [
     { name: 'main', type: 'function', inputs: [], outputs: [{ name: 'addr', type: 'address' }]},
 ]
 
+const c7bAbi = [
+    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
+    { name: 'main', type: 'function', inputs: [{ name: 'calldata', type: 'bytes' }], outputs: [{ name: 'addr', type: 'address' }]},
+]
+
 const c8Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
     { name: 'main', type: 'function', inputs: [], outputs: []},
@@ -110,7 +115,7 @@ const compile = name => new Promise((resolve, reject) => {
 
 beforeAll(async () => {
     // Compile contracts
-    const names = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8'];
+    const names = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c7b', 'c8'];
     for (name of names) {
         contracts[name] = await compile(name);
     }
@@ -262,6 +267,22 @@ it('test c7 - create', async function () {
     // const cinstance = ewasmjsvm.initialize(createdContract.runtimeCode, c2Abi[1])
     // const answ = await cinstance.main();
     // expect(answ.val).toBe(999999);
+});
+
+it('test c7b - create from calldata', async function () {
+    const tx_info = {...DEFAULT_TX_INFO, value: 1400};
+    const ewmodule = ewasmjsvm.initialize(contracts.c7b.bin, c7bAbi);
+    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    const calldata = contracts.c1.bin;
+    const { addr } = await runtime.main(calldata, tx_info);
+
+    const createdContract = ewasmjsvm.getPersistence().get(addr);
+    expect(createdContract.balance).toBe(tx_info.value);
+    expect(createdContract.runtimeCode).not.toBeNull();
+
+    const cinstance = ewasmjsvm.initialize(createdContract.runtimeCode, [c2Abi[1]])
+    const answ = await cinstance.main(DEFAULT_TX_INFO);
+    expect(answ.val).toBe(999999);
 });
 
 it('test c8 selfDestruct', async function () {
