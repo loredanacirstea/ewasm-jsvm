@@ -59,4 +59,21 @@ const blocks = () => {
     }
 }
 
-module.exports = { persistence, blocks };
+const logs = () => {
+    const logs = [];
+    const logsByBlockNumber = {};
+
+    const set = (log) => {
+        logs.push(log);
+        if (!logsByBlockNumber[log.blockNumber]) {
+            logsByBlockNumber[log.blockNumber] = [];
+        }
+        logsByBlockNumber[log.blockNumber].push(log);
+    }
+
+    const getBlockLogs = number => logsByBlockNumber[number];
+    const getLogs = () => logs;
+    return { set, getBlockLogs, getLogs };
+}
+
+module.exports = { persistence, blocks, logs };

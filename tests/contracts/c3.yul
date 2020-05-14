@@ -73,15 +73,8 @@ object "TestWasm3" {
 
             // externalCodeCopy
             extcodecopy(addr2, slotPtr(data_ptr, 18), 32, 32)
-            
-            return (data_ptr, slotOffset(19))
 
-            // // log
-            // log0(0, 40)
-            // log1(0, 40, 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
-            // log2(0, 40, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd)
-            // log3(0, 40, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa)
-            // log4(0, 40, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff9, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7, 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff6)
+            return (data_ptr, slotOffset(19))
 
             
             // getReturnDataSize
@@ -101,13 +94,6 @@ object "TestWasm3" {
             // selfDestruct
 
             // create
-
-
-            // finish
-            // return (0, 220)
-
-            // revert
-            // revert(0, 264)
 
             function slotOffset(count) -> offset {
                 offset := mul(count, 32)

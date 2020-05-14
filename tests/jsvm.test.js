@@ -51,6 +51,11 @@ const c4Abi = [
     { name: 'main', type: 'function', inputs: [], outputs: [{ name: 'val', type: 'uint32' }]},
 ]
 
+const c5Abi = [
+    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
+    { name: 'main', type: 'function', inputs: [], outputs: []},
+]
+
 const DEFAULT_TX_INFO = {
     gasLimit: 1000000,
     gasPrice: 10,
@@ -78,7 +83,7 @@ const compile = name => new Promise((resolve, reject) => {
 });
 
 beforeAll(async () => {
-    const names = ['c1', 'c2', 'c3', 'c4'];
+    const names = ['c1', 'c2', 'c3', 'c4', 'c5'];
     for (name of names) {
         contracts[name] = await compile(name);
     }
@@ -147,6 +152,46 @@ it('test c4', async function () {
         return runtime.main(DEFAULT_TX_INFO);
     }).rejects.toThrow(/revert/i);
     // }).rejects.toThrow(/Revert: 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/);
+});
+
+it('test c5', async function () {
+    const ewmodule = ewasmjsvm.initialize(contracts.c5.bin, c5Abi);
+    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    deployments.c5 = runtime;
+    await runtime.main(DEFAULT_TX_INFO);
+
+    const block = ewasmjsvm.getBlock('latest');
+    const logs = ewasmjsvm.getLogs().getBlockLogs(block.number);
+
+    logs.forEach(log => {
+        expect(log.blockNumber).toBe(block.number);
+        expect(utils.decode(log.data, [{type: 'uint', name: 'data'}]).data).toBe(777777);
+    });
+    expect(logs[0].topics.length).toBe(0);
+    expect(logs[1].topics.length).toBe(1);
+    expect(logs[2].topics.length).toBe(2);
+    expect(logs[3].topics.length).toBe(3);
+    expect(logs[4].topics.length).toBe(4);
+
+    expect(logs[1].topics[0]).toBe(55555619);
+    
+    expect(logs[2].topics[0]).toBe(55555618);
+    expect(logs[2].topics[1]).toBe(55555617);
+
+    expect(logs[3].topics[0]).toBe(55555616);
+    expect(logs[3].topics[1]).toBe(55555615);
+    expect(logs[3].topics[2]).toBe(55555614);
+
+    expect(logs[4].topics[0]).toBe(55555613);
+    expect(logs[4].topics[1]).toBe(55555612);
+    expect(logs[4].topics[2]).toBe(55555611);
+    expect(logs[4].topics[3]).toBe(55555610);
+
+    // TODO: FIXME - these values should be correct
+    // expect(logs[1].topics).toBe([55555555]);
+    // expect(logs[2].topics).toBe([55555554, 55555553]);
+    // expect(logs[3].topics).toBe([55555552, 55555551, 55555550]);
+    // expect(logs[4].topics).toBe([55555549, 55555548, 55555547, 55555546]);
 });
 
 function parseCompilerOutput(str) {

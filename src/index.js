@@ -1,4 +1,8 @@
-const { persistence: initPersistence, blocks: initBlocks } = require('./persistence.js');
+const {
+    persistence: initPersistence,
+    blocks: initBlocks,
+    logs: initLogs,
+} = require('./persistence.js');
 const {
     encode,
     decode,
@@ -11,6 +15,7 @@ const {
 
 const persistence = initPersistence();
 const blocks = initBlocks();
+const chainlogs = initLogs();
 
 const initialize =  (wasmHexSource, wabi)  => {
     return initializeWrap(hexToUint8Array(wasmHexSource), wabi);
@@ -32,7 +37,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
             const newmodule = initializeWrap(answ, newabi, true);
             currentPromise.resolve(newmodule);
         } else {
-            const decoded = decode(answ, wabi.find(abi => abi.name === currentPromise.name));
+            const decoded = decode(answ, wabi.find(abi => abi.name === currentPromise.name).outputs);
             currentPromise.resolve(decoded);
         }
         currentPromise = null;
@@ -63,6 +68,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
     const getCalldata = () => currentPromise.calldata;
     const importObj = initializeEthImports(
         persistence,
+        chainlogs,
         storageMap,
         wasmbin,
         getCalldata,
@@ -111,6 +117,7 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
 
 const initializeEthImports = (
     persistence,
+    chainlogs,
     storageMap,
     wasmbin,
     getCalldata,
@@ -126,7 +133,7 @@ const initializeEthImports = (
     revertAction,
 ) => {
     const storeMemory = (bytes, offset, size) => {
-        console.log('storeMemory: ', logu8a(bytes.slice(0, 100)), offset, size);
+        // console.log('storeMemory: ', logu8a(bytes.slice(0, 100)), offset, size);
 
         const wmemory = getMemory();
         let mem = new Uint8Array(wmemory.buffer);
@@ -158,26 +165,20 @@ const initializeEthImports = (
         ethereum: {
             useGas: function (amount_i64) {
                 // DONE_1
-                console.log('useGas', amount_i64)
                 useGas(amount_i64);
             },
             getAddress: function (resultOffset_i32ptr) {
                 // DONE_1
-                console.log('getAddress', resultOffset_i32ptr)
-
                 // const size = 20;
                 const size = 32;
                 const address = new Uint8Array(size);
                 address.set(hexToUint8Array(getAddress()), size - 20);
 
                 storeMemory(address, resultOffset_i32ptr, size);
-
-                console.log('getAddress', logu8a(loadMemory(resultOffset_i32ptr, size)));
             },
             // result is u128
             getExternalBalance: function (addressOffset_i32ptr, resultOffset_i32ptr) {
                 // TOBEDONE FIXME
-                console.log('getExternalBalance', addressOffset_i32ptr, resultOffset_i32ptr)
                 // const size = 16;
                 const size = 32;
                 const balance = new Uint8Array(size);
@@ -189,8 +190,6 @@ const initializeEthImports = (
             // result i32 Returns 0 on success and 1 on failure
             getBlockHash: function (number_i64, resultOffset_i32ptr) {
                 // DONE_1
-                console.log('getBlockHash', number_i64, resultOffset_i32ptr)
-   
                 const hash = hexToUint8Array(getBlock().hash);
                 storeMemory(hash, resultOffset_i32ptr, 32);
                 return newi32(0);
@@ -209,8 +208,6 @@ const initializeEthImports = (
             },
             callDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
                 // DONE_1
-                console.log('callDataCopy', resultOffset_i32ptr_bytes, dataOffset_i32, length_i32)
-                
                 storeMemory(
                     getCalldata()
                         .slice(dataOffset_i32, dataOffset_i32 + length_i32),
@@ -221,7 +218,6 @@ const initializeEthImports = (
             // returns i32
             getCallDataSize: function () {
                 // DONE_1
-                console.log('getCallDataSize')
                 return newi32(getCalldata().length);
             },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
@@ -260,55 +256,43 @@ const initializeEthImports = (
             },
             storageStore: function (pathOffset_i32ptr_bytes32, valueOffset_i32ptr_bytes32) {
                 // DONE_1
-                console.log('storageStore', pathOffset_i32ptr_bytes32, valueOffset_i32ptr_bytes32)
                 storageStore(pathOffset_i32ptr_bytes32, valueOffset_i32ptr_bytes32);
             },
             storageLoad: function (pathOffset_i32ptr_bytes32, resultOffset_i32ptr_bytes32) {
                 // DONE_1
-                console.log('storageLoad', pathOffset_i32ptr_bytes32, resultOffset_i32ptr_bytes32)
                 storageLoad(pathOffset_i32ptr_bytes32, resultOffset_i32ptr_bytes32);
             },
             getCaller: function (resultOffset_i32ptr_address) {
                 // DONE_1
-                console.log('getCaller', resultOffset_i32ptr_address)
                 // const size = 20;
                 const size = 32;
                 const address = new Uint8Array(size);
                 address.set(hexToUint8Array(getCaller()), size - 20);
 
                 storeMemory(address, resultOffset_i32ptr_address, size);
-                
-                console.log('getCaller', logu8a(loadMemory(resultOffset_i32ptr_address, size)));
             },
             getCallValue: function (resultOffset_i32ptr_u128) {
                 // DONE_1
-                console.log('getCallValue', resultOffset_i32ptr_u128)
                 // const size = 16;
                 const size = 32;
                 const value = new Uint8Array(size);
                 const tightValue = hexToUint8Array(getValue().toString(16));
                 value.set(tightValue, size - tightValue.length);
                 storeMemory(value, resultOffset_i32ptr_u128, size);
-
-                console.log('getCallValue', logu8a(loadMemory(resultOffset_i32ptr_u128, size)));
             },
             codeCopy: function (resultOffset_i32ptr_bytes, codeOffset_i32, length_i32) {
                 // DONE_1
-                console.log('codeCopy', resultOffset_i32ptr_bytes, codeOffset_i32, length_i32)
-
                 const runtime = wasmbin.slice(codeOffset_i32, codeOffset_i32 + length_i32)
                 storeMemory(runtime, resultOffset_i32ptr_bytes, length_i32)
             },
             // returns i32 - code size current env
             getCodeSize: function() {
                 // DONE_1
-                console.log('getCodeSize');
                 return newi32(wasmbin.length);
             },
             // block’s beneficiary address
             getBlockCoinbase: function(resultOffset_i32ptr_address) {
                 // DONE_1
-                console.log('getBlockCoinbase', resultOffset_i32ptr_address)
                 const size = 32;
                 const value = new Uint8Array(size);
                 const tightValue = hexToUint8Array(getBlock().coinbase);
@@ -330,7 +314,6 @@ const initializeEthImports = (
             // returns u256
             getBlockDifficulty: function (resulltOffset_i32ptr_u256) {
                 // DONE_1
-                console.log('getBlockDifficulty', resulltOffset_i32ptr_u256)
                 const size = 32;
                 const value = new Uint8Array(size);
                 const tightValue = hexToUint8Array(getBlock().difficulty.toString(16));
@@ -345,8 +328,6 @@ const initializeEthImports = (
                 dataLength_i32,
             ) {
                 // DONE_1
-                console.log('externalCodeCopy', addressOffset_i32ptr_address, resultOffset_i32ptr_bytes, codeOffset_i32, dataLength_i32);
-
                 let address = loadMemory(addressOffset_i32ptr_address, 32);
                 address = '0x' + uint8ArrayToHex(address).substring(0, 40);
                 const codeSlice = persistence.get(address).runtimeCode.slice(codeOffset_i32, codeOffset_i32 + dataLength_i32);
@@ -355,8 +336,6 @@ const initializeEthImports = (
             // Returns extCodeSize i32
             getExternalCodeSize: function (addressOffset_i32ptr_address) {
                 // DONE_1
-                console.log('getExternalCodeSize', addressOffset_i32ptr_address)
-                
                 let address = loadMemory(addressOffset_i32ptr_address, 32);
                 address = '0x' + uint8ArrayToHex(address).substring(0, 40);
                 return newi32(persistence.get(address).runtimeCode.length);
@@ -364,19 +343,16 @@ const initializeEthImports = (
             // result gasLeft i64
             getGasLeft: function () {
                 // DONE_1
-                console.log('getGasLeft')
                 const gas = getGas();
                 return newi64(gas.limit - gas.used);
             },
             // result blockGasLimit i64
             getBlockGasLimit: function () {
                 // DONE_1
-                console.log('getBlockGasLimit')
                 return newi64(getBlock().gasLimit);
             },
             getTxGasPrice: function (resultOffset_i32ptr_u128) {
                 // DONE_1
-                console.log('getTxGasPrice', resultOffset_i32ptr_u128)
                 const size = 32;
                 const value = new Uint8Array(size);
                 const tightValue = hexToUint8Array(getGas().price.toString(16));
@@ -387,23 +363,26 @@ const initializeEthImports = (
                 dataOffset_i32ptr_bytes,
                 dataLength_i32,
                 numberOfTopics_i32,
-                topic1_i32ptr_bytes32,
-                topic2_i32ptr_bytes32,
-                topic3_i32ptr_bytes32,
-                topic4_i32ptr_bytes32,
+                ...topics
+                // topic1_i32ptr_bytes32,
+                // topic2_i32ptr_bytes32,
+                // topic3_i32ptr_bytes32,
+                // topic4_i32ptr_bytes32,
             ) {
-                // TOBEDONE
-                console.log('log', dataOffset_i32ptr_bytes, dataLength_i32, numberOfTopics_i32, topic1_i32ptr_bytes32, topic2_i32ptr_bytes32, topic3_i32ptr_bytes32, topic4_i32ptr_bytes32);
+                // DONE_1
+                chainlogs.set({
+                    blockNumber: getBlock().number,
+                    data: loadMemory(dataOffset_i32ptr_bytes, dataLength_i32),
+                    topics: topics.slice(0, numberOfTopics_i32),
+                })
             },
             // result blockNumber i64
             getBlockNumber: function () {
                 // DONE_1
-                console.log('getBlockNumber')
                 return newi64(getBlock().number);
             },
             getTxOrigin: function (resultOffset_i32ptr_address) {
                 // DONE_1
-                console.log('getTxOrigin', resultOffset_i32ptr_address)
                 // const size = 20;
                 const size = 32;
                 const address = new Uint8Array(size);
@@ -413,15 +392,11 @@ const initializeEthImports = (
             },
             finish: function (dataOffset_i32ptr_bytes, dataLength_i32) {
                 // DONE_1
-                console.log('finish', dataOffset_i32ptr_bytes, dataLength_i32)
-
                 const res = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
                 finishAction(res);
             },
             revert: function (dataOffset_i32ptr_bytes, dataLength_i32) {
                 // DONE_1
-                console.log('revert', dataOffset_i32ptr_bytes, dataLength_i32)
-
                 const res = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
                 revertAction(res);
             },
@@ -442,7 +417,6 @@ const initializeEthImports = (
             // result blockTimestamp i64,
             getBlockTimestamp: function () {
                 // DONE_1
-                console.log('getBlockTimestamp')
                 return newi64(getBlock().timestamp);
             }
         }
@@ -450,5 +424,6 @@ const initializeEthImports = (
 }
 
 const getBlock = tag => blocks.get(tag);
+const getLogs = () => chainlogs;
 
-module.exports = {initialize, getBlock};
+module.exports = {initialize, getBlock, getLogs};

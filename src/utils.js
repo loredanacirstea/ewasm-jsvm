@@ -41,11 +41,10 @@ const uint8ArrayToHex = uint8arr => {
     return hexv;
 }
 
-const decode = (uint8arr, funcabi) => {
-    console.log('decode: ', logu8a(uint8arr));
+const decode = (uint8arr, types) => {
     let offset = 0;
     let result = {};
-    const values = funcabi.outputs.forEach(abi => {
+    const values = types.forEach(abi => {
         // const size = sizeMap[abi.type];
         const size = 32;
         const value = (typeDecode[abi.type] || typeDecode.default)(uint8arr.slice(offset, offset + size));
