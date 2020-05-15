@@ -5,7 +5,9 @@ object "TestWasm4" {
     }
     object "Runtime" {
         code {
-            mstore(0, 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee)
+            // mstore(0, 0xeeeeeeeeeeeeeeee)
+            
+            mstore(0, 0xeeeeeeeeeeeeee)
             revert (0, 32)
         }
     }

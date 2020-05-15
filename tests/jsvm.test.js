@@ -145,7 +145,7 @@ it('test c1', async function () {
     const ewmodule = ewasmjsvm.initialize(contracts.c1.bin, c1Abi);
     deployments.c1 = ewmodule;
     const answ = await ewmodule.main(DEFAULT_TX_INFO);
-    expect(answ.val).toBe(999999);
+    expect(answ.val).toBe(0xeeeeeeeeeeeeee);
 });
 
 it('test c2', async function () {
@@ -200,8 +200,7 @@ it('test c4 revert', async function () {
 
     await expect(() => {
         return runtime.main(DEFAULT_TX_INFO);
-    }).rejects.toThrow(/revert/i);
-    // }).rejects.toThrow(/Revert: 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee/);
+    }).rejects.toThrow(/Revert: 00000000000000000000000000000000000000000000000000eeeeeeeeeeeeee/);
 });
 
 it('test c5 logs', async function () {
@@ -282,7 +281,7 @@ it('test c7b - create from calldata', async function () {
 
     const cinstance = ewasmjsvm.initialize(createdContract.runtimeCode, [c2Abi[1]])
     const answ = await cinstance.main(DEFAULT_TX_INFO);
-    expect(answ.val).toBe(999999);
+    expect(answ.val).toBe(0xeeeeeeeeeeeeee);
 });
 
 it('test c8 selfDestruct', async function () {
