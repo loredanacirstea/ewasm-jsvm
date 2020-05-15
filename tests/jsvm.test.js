@@ -262,10 +262,9 @@ it('test c7 - create', async function () {
     expect(createdContract.balance).toBe(tx_info.value);
     expect(createdContract.runtimeCode).not.toBeNull();
 
-    // TODO fixme
-    // const cinstance = ewasmjsvm.initialize(createdContract.runtimeCode, c2Abi[1])
-    // const answ = await cinstance.main();
-    // expect(answ.val).toBe(999999);
+    const cinstance = ewasmjsvm.initialize(createdContract.runtimeCode, [c2Abi[1]])
+    const answ = await cinstance.main(DEFAULT_TX_INFO);
+    expect(answ.val).toBe(999999);
 });
 
 it('test c7b - create from calldata', async function () {

@@ -5,10 +5,13 @@ object "TestWasm7" {
     }
     object "Runtime" {
         code {
+            let _data := 512
+            codecopy(_data, dataoffset("SecondContract"), datasize("SecondContract"))
+            
             // create new contract with code mem[p…(p+n)) and send v wei and return the new address
             let addr := create(
                 callvalue(),
-                dataoffset("SecondContract"),
+                _data,
                 datasize("SecondContract")
             )
 
