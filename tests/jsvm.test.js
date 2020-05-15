@@ -6,6 +6,7 @@ const ewasmjsvm = require('../src/index.js');
 const utils = require('../src/utils.js');
 
 const C_PATH = './tests/contracts';
+const B_PATH = './tests/build';
 const solToYul = name => `solc --ir -o ./build ${name}.sol --overwrite`;
 const yulToEwasm = name => `solc --strict-assembly --optimize --yul-dialect evm --machine ewasm ${C_PATH}/${name}.yul`;
 const watToWasm = name => `wat2wasm build_wat/${name}.wat -o build_wasm/${name}.wasm`;
@@ -115,9 +116,12 @@ const compile = name => new Promise((resolve, reject) => {
 
 beforeAll(async () => {
     // Compile contracts
-    const names = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c7b', 'c8'];
+    let names = await promisify(fs.readdir, C_PATH).catch(console.log);
+    names = names.map(name => name.replace('.yul', ''));
+
     for (name of names) {
         contracts[name] = await compile(name);
+        createBuild(name, contracts[name]);
     }
 
     // Assign balances to accounts
@@ -302,7 +306,42 @@ it('test c8 selfDestruct', async function () {
     expect(ewasmjsvm.getPersistence().get(runtime.address)).toBeUndefined();
 });
 
+const postIndex = (str, marker) => {
+    const index = str.indexOf(marker);
+    return {
+        pre: index - 1,
+        post: index + marker.length + 1,
+    }
+}
+
 function parseCompilerOutput(str) {
     const bin = str.match(/Binary representation:\n(.*)\n/)[1];
-    return {bin};
+    const watm = str.match(/Text representation:\n((.*\n*)*)/);
+    const wat = watm[1];
+
+    const prettyIndex = postIndex(str, 'Pretty printed source:');
+    const yulWasmIndex = postIndex(str, 'Translated source:');
+    const binaryIndex = postIndex(str, 'Binary representation:');
+
+    const optimized = str.substring(prettyIndex.post, yulWasmIndex.pre);
+    const yul_wasm = str.substring(yulWasmIndex.post, binaryIndex.pre);
+    return {optimized, yul_wasm, bin, wat};
+}
+
+async function createBuild(name, { bin, optimized, yul_wasm, wat}) {
+    const basePath = B_PATH + '/' + name + '_';
+
+    await promisify(fs.writeFile, basePath + 'bin', bin).catch(console.log);
+    await promisify(fs.writeFile, basePath + 'wat.wat', wat).catch(console.log);
+    await promisify(fs.writeFile, basePath + 'wasm.yul', yul_wasm).catch(console.log);
+    await promisify(fs.writeFile, basePath + 'opt.yul', optimized).catch(console.log);
+}
+
+function promisify(func, ...args) {
+    return new Promise((resolve, reject) => {
+        func(...args, (error, result) => {
+            if (error) reject(error);
+            resolve(result);
+        })
+    });
 }
