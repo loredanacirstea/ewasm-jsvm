@@ -78,6 +78,11 @@ const c8Abi = [
     { name: 'main', type: 'function', inputs: [], outputs: []},
 ]
 
+let c9Abi = [
+    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
+    { name: 'main', type: 'function', inputs: [{ name: 'addr', type: 'address'}], outputs: [{ name: 'val', type: 'uint' }]},
+]
+
 const DEFAULT_TX_INFO = {
     gasLimit: 1000000,
     gasPrice: 10,
@@ -304,6 +309,17 @@ it('test c8 selfDestruct', async function () {
     fromBalance += tx_info.value;
     expect(ewasmjsvm.getPersistence().get(tx_info.from).balance).toBe(fromBalance);
     expect(ewasmjsvm.getPersistence().get(runtime.address)).toBeUndefined();
+});
+
+// TODO
+it('test c9 calls', async function () {
+    const ewmodule = ewasmjsvm.initialize(contracts.c9.bin, c9Abi);
+    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    deployments.c9 = runtime;
+
+    const calldata = deployments.c2.address;
+    const answ = await runtime.main(calldata, DEFAULT_TX_INFO);
+    // expect(answ.val).toBe(999999);
 });
 
 const postIndex = (str, marker) => {

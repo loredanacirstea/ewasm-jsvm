@@ -77,35 +77,12 @@ object "TestWasm3" {
 
             return (data_ptr, slotOffset(19))
 
-            
-            // getReturnDataSize
-
-            // returnDataCopy
-
-            // call
-            // let addr2 := 0xD32298893dD95c1Aaed8A79bc06018b8C265a279
-            // let success := call(gas(), addr2, 1000, 0, 0, 0, 0)
-
-            // callCode
-
-            // callDelegate
-
-            // callStatic
-
-            // selfDestruct
-
-            // create
-
             function slotOffset(count) -> offset {
                 offset := mul(count, 32)
             }
 
             function slotPtr(ptr, count) -> _ptr {
                 _ptr := add(ptr, slotOffset(count))
-            }
-
-            function mslice(position, length) -> result {
-                result := div(mload(position), exp(2, sub(256, mul(length, 8))))
             }
         }
     }
