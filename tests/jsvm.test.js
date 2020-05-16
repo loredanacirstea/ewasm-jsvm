@@ -1,13 +1,12 @@
 const fs = require('fs');
 const { exec } = require("child_process");
-const solc = require('solc');
-const assert = require('assert');
 const ewasmjsvm = require('../src/index.js');
 const utils = require('../src/utils.js');
 
 const C_PATH = './tests/contracts';
+const SOL_PATH = './tests/sol';
 const B_PATH = './tests/build';
-const solToYul = name => `solc --ir -o ./build ${name}.sol --overwrite`;
+const solToYul = name => `solc --ir -o ${C_PATH} ${SOL_PATH}/${name}.sol --overwrite`;
 const yulToEwasm = name => `solc --strict-assembly --optimize --yul-dialect evm --machine ewasm ${C_PATH}/${name}.yul`;
 const watToWasm = name => `wat2wasm build_wat/${name}.wat -o build_wasm/${name}.wasm`;
 
@@ -119,6 +118,24 @@ const compile = name => new Promise((resolve, reject) => {
     });
 });
 
+const compileSol = name => new Promise((resolve, reject) => {
+    const command = solToYul(name);
+    console.log('Running command: ', command);
+    exec(command, async (error, stdout, stderr) => {
+        if (error) {
+            console.log(`error: ${error.message}`);
+            reject(error);
+        }
+        if (stderr) {
+            console.log(`stderr: ${stderr}`);
+            // reject(error);
+        }
+        // The .yul file has been created
+        const compiledYul = await compile(name);
+        resolve(compiledYul);
+    });
+});
+
 beforeAll(async () => {
     // Compile contracts
     let names = await promisify(fs.readdir, C_PATH).catch(console.log);
@@ -126,6 +143,13 @@ beforeAll(async () => {
 
     for (name of names) {
         contracts[name] = await compile(name);
+        createBuild(name, contracts[name]);
+    }
+
+    let sol_names = await promisify(fs.readdir, SOL_PATH).catch(console.log);
+    sol_names = sol_names.map(name => name.replace('.sol', ''));
+    for (name of sol_names) {
+        contracts[name] = await compileSol(name);
         createBuild(name, contracts[name]);
     }
 
