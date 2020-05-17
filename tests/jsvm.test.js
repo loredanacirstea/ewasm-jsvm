@@ -137,25 +137,23 @@ const compileSol = name => new Promise((resolve, reject) => {
             // reject(error);
         }
         // The .yul file has been created
-        const compiledYul = await compile(name);
-        resolve(compiledYul);
+        resolve();
     });
 });
 
 beforeAll(async () => {
     // Compile contracts
+    let sol_names = await promisify(fs.readdir, SOL_PATH).catch(console.log);
+    sol_names = sol_names.map(name => name.replace('.sol', ''));
+    for (name of sol_names) {
+        await compileSol(name);
+    }
+
     let names = await promisify(fs.readdir, C_PATH).catch(console.log);
     names = names.map(name => name.replace('.yul', ''));
 
     for (name of names) {
         contracts[name] = await compile(name);
-        createBuild(name, contracts[name]);
-    }
-
-    let sol_names = await promisify(fs.readdir, SOL_PATH).catch(console.log);
-    sol_names = sol_names.map(name => name.replace('.sol', ''));
-    for (name of sol_names) {
-        contracts[name] = await compileSol(name);
         createBuild(name, contracts[name]);
     }
 
