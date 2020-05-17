@@ -11,17 +11,17 @@ const yulToEwasm = name => `solc --strict-assembly --optimize --yul-dialect evm 
 const watToWasm = name => `wat2wasm build_wat/${name}.wat -o build_wasm/${name}.wasm`;
 
 const c1Abi = [
-    { name: 'main', type: 'function', inputs: [], outputs: [{ name: 'val', type: 'uint32' }]},
+    { name: 'main', type: 'fallback', inputs: [], outputs: [{ name: 'val', type: 'uint32' }]},
 ]
 
 const c2Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'function', inputs: [], outputs: [{ name: 'val', type: 'uint32' }]},
+    { name: 'main', type: 'fallback', inputs: [], outputs: [{ name: 'val', type: 'uint32' }]},
 ]
 
 let c3Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'function', inputs: [
+    { name: 'main', type: 'fallback', inputs: [
         { name: 'addr', type: 'address' },
         { name: 'account', type: 'address' },
     ], outputs: [
@@ -49,37 +49,43 @@ let c3Abi = [
 
 const c4Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'function', inputs: [], outputs: [{ name: 'val', type: 'uint32' }]},
+    { name: 'main', type: 'fallback', inputs: [], outputs: [{ name: 'val', type: 'uint32' }]},
 ]
 
 const c5Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'function', inputs: [], outputs: []},
+    { name: 'main', type: 'fallback', inputs: [], outputs: []},
 ]
 
 const c6Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'function', inputs: [{ name: 'addr', type: 'address' }], outputs: [{ name: 'balance', type: 'uint' }]},
+    { name: 'main', type: 'fallback', inputs: [{ name: 'addr', type: 'address' }], outputs: [{ name: 'balance', type: 'uint' }]},
 ]
 
 const c7Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'function', inputs: [], outputs: [{ name: 'addr', type: 'address' }]},
+    { name: 'main', type: 'fallback', inputs: [], outputs: [{ name: 'addr', type: 'address' }]},
 ]
 
 const c7bAbi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'function', inputs: [{ name: 'calldata', type: 'bytes' }], outputs: [{ name: 'addr', type: 'address' }]},
+    { name: 'main', type: 'fallback', inputs: [{ name: 'calldata', type: 'bytes' }], outputs: [{ name: 'addr', type: 'address' }]},
 ]
 
 const c8Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'function', inputs: [], outputs: []},
+    { name: 'main', type: 'fallback', inputs: [], outputs: []},
 ]
 
-let c9Abi = [
+const c9Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'function', inputs: [{ name: 'addr', type: 'address'}], outputs: [{ name: 'val', type: 'uint' }]},
+    { name: 'main', type: 'fallback', inputs: [{ name: 'addr', type: 'address'}], outputs: [{ name: 'val', type: 'uint' }]},
+]
+
+const c10Abi = [
+    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
+    { name: 'sum', type: 'function', inputs: [{ name: 'a', type: 'uint256'}, { name: 'b', type: 'uint256'}], outputs: [{ name: 'c', type: 'uint256'}]},
+    { name: 'double', type: 'function', inputs: [{ name: 'a', type: 'uint256'}], outputs: [{ name: 'b', type: 'uint256'}]},
 ]
 
 const DEFAULT_TX_INFO = {
@@ -175,15 +181,14 @@ it('test utils', async function () {
 });
 
 it('test c1', async function () {
-    const ewmodule = ewasmjsvm.initialize(contracts.c1.bin, c1Abi);
+    const ewmodule = ewasmjsvm.runtimeSim(contracts.c1.bin, c1Abi);
     deployments.c1 = ewmodule;
     const answ = await ewmodule.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(0xeeeeeeeeeeeeee);
 });
 
 it('test c2', async function () {
-    const ewmodule = ewasmjsvm.initialize(contracts.c2.bin, c2Abi);
-    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    const runtime = await ewasmjsvm.deploy(contracts.c2.bin, c2Abi)(DEFAULT_TX_INFO);
     deployments.c2 = runtime;
     const answ = await runtime.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(999999);
@@ -193,10 +198,9 @@ it('test c3 multi', async function () {
     const tx_info = {...DEFAULT_TX_INFO, value: 1400};
     let fromBalance = ewasmjsvm.getPersistence().get(tx_info.from).balance;
     
-    const ewmodule = ewasmjsvm.initialize(contracts.c3.bin, c3Abi);
-    deployments.c3 = ewmodule;
+    const runtime = await ewasmjsvm.deploy(contracts.c3.bin, c3Abi)(tx_info);
+    deployments.c3 = runtime;
     const address2 = deployments.c2.address;
-    const runtime = await ewmodule.main(tx_info);
     
     fromBalance -= tx_info.value;
     expect(ewasmjsvm.getPersistence().get(tx_info.from).balance).toBe(fromBalance);
@@ -227,8 +231,7 @@ it('test c3 multi', async function () {
 });
 
 it('test c4 revert', async function () {
-    const ewmodule = ewasmjsvm.initialize(contracts.c4.bin, c4Abi);
-    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    const runtime = await ewasmjsvm.deploy(contracts.c4.bin, c4Abi)(DEFAULT_TX_INFO);
     deployments.c4 = runtime;
 
     await expect(() => {
@@ -237,8 +240,7 @@ it('test c4 revert', async function () {
 });
 
 it('test c5 logs', async function () {
-    const ewmodule = ewasmjsvm.initialize(contracts.c5.bin, c5Abi);
-    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    const runtime = await ewasmjsvm.deploy(contracts.c5.bin, c5Abi)(DEFAULT_TX_INFO);
     deployments.c5 = runtime;
     await runtime.main(DEFAULT_TX_INFO);
 
@@ -277,8 +279,7 @@ it('test c5 logs', async function () {
 });
 
 it('test c6 getExternalBalance', async function () {
-    const ewmodule = ewasmjsvm.initialize(contracts.c6.bin, c6Abi);
-    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    const runtime = await ewasmjsvm.deploy(contracts.c6.bin, c6Abi)(DEFAULT_TX_INFO);
     deployments.c6 = runtime;
     const answ = await runtime.main(accounts[0].address, DEFAULT_TX_INFO);
     // expect(answ.balance).toBe(accounts[0].balance);
@@ -286,24 +287,22 @@ it('test c6 getExternalBalance', async function () {
 
 it('test c7 - create', async function () {
     const tx_info = {...DEFAULT_TX_INFO, value: 1400};
-    const ewmodule = ewasmjsvm.initialize(contracts.c7.bin, c7Abi);
-    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    const runtime = await ewasmjsvm.deploy(contracts.c7.bin, c7Abi)(DEFAULT_TX_INFO);
     deployments.c7 = runtime;
     const { addr } = await runtime.main(tx_info);
-    
+
     const createdContract = ewasmjsvm.getPersistence().get(addr);
     expect(createdContract.balance).toBe(tx_info.value);
     expect(createdContract.runtimeCode).not.toBeNull();
 
-    const cinstance = ewasmjsvm.initialize(createdContract.runtimeCode, [c2Abi[1]])
+    const cinstance = ewasmjsvm.runtimeSim(createdContract.runtimeCode, [c2Abi[1]], addr);
     const answ = await cinstance.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(999999);
 });
 
 it('test c7b - create from calldata', async function () {
     const tx_info = {...DEFAULT_TX_INFO, value: 1400};
-    const ewmodule = ewasmjsvm.initialize(contracts.c7b.bin, c7bAbi);
-    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    const runtime = await ewasmjsvm.deploy(contracts.c7b.bin, c7bAbi)(DEFAULT_TX_INFO);
     const calldata = contracts.c1.bin;
     const { addr } = await runtime.main(calldata, tx_info);
 
@@ -311,7 +310,7 @@ it('test c7b - create from calldata', async function () {
     expect(createdContract.balance).toBe(tx_info.value);
     expect(createdContract.runtimeCode).not.toBeNull();
 
-    const cinstance = ewasmjsvm.initialize(createdContract.runtimeCode, [c2Abi[1]])
+    const cinstance = ewasmjsvm.runtimeSim(createdContract.runtimeCode, [c2Abi[1]])
     const answ = await cinstance.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(0xeeeeeeeeeeeeee);
 });
@@ -320,8 +319,7 @@ it('test c8 selfDestruct', async function () {
     const tx_info = {...DEFAULT_TX_INFO, value: 800000};
     let fromBalance = ewasmjsvm.getPersistence().get(tx_info.from).balance;
     
-    const ewmodule = ewasmjsvm.initialize(contracts.c8.bin, c8Abi);
-    const runtime = await ewmodule.main(tx_info);
+    const runtime = await ewasmjsvm.deploy(contracts.c8.bin, c8Abi)(tx_info);
     deployments.c8 = runtime;
 
     fromBalance -= tx_info.value;
@@ -337,13 +335,21 @@ it('test c8 selfDestruct', async function () {
 
 // TODO
 it('test c9 calls', async function () {
-    const ewmodule = ewasmjsvm.initialize(contracts.c9.bin, c9Abi);
-    const runtime = await ewmodule.main(DEFAULT_TX_INFO);
+    const runtime = await ewasmjsvm.deploy(contracts.c9.bin, c9Abi)(DEFAULT_TX_INFO);
     deployments.c9 = runtime;
 
     const calldata = deployments.c2.address;
     const answ = await runtime.main(calldata, DEFAULT_TX_INFO);
     // expect(answ.val).toBe(999999);
+});
+
+it('test c10', async function () {
+    const runtime = await ewasmjsvm.deploy(contracts.c10.bin, c10Abi)(DEFAULT_TX_INFO);
+    let answ = await runtime.sum('0x08', '0x02', DEFAULT_TX_INFO);
+    expect(answ.c).toBe(10);
+
+    answ = await runtime.double('0x08', DEFAULT_TX_INFO);
+    expect(answ.b).toBe(16);
 });
 
 const postIndex = (str, marker) => {
