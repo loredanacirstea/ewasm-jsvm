@@ -1,0 +1,30 @@
+dist: xenial
+sudo: true
+language: node_js
+node_js:
+- '13'
+- 'lts/*'
+
+cache: npm
+
+env:
+  global:
+    - SOLC_URL='https://github.com/ethereum/solidity/releases/download/v0.6.8/solc-static-linux'
+    - SOLC_VERSION='v0.6.8'
+
+# !make download_solc executable first
+# git update-index --add --chmod=+x ./.travis/download_solc.sh
+# git commit -m 'Make download_solc.sh executable'
+before_install:
+  - mkdir -p $HOME/.bin
+  - export PATH=$PATH:$HOME/.bin
+  - ./.travis/download_solc.sh
+
+install:
+  - npm install
+
+before_script:
+  - mkdir tests/build
+
+script:
+  - npm run test
