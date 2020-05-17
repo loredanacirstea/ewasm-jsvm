@@ -1,12 +1,4 @@
-const randomHex = (size) => {
-    // hex values
-    let allowed = [...Array(6).keys()].map(i => i + 97)
-        .concat([...Array(10).keys()].map(i => i + 48));
-    return '0x' + [...Array(size).keys()]
-        .map(i => Math.floor(Math.random() * 16))
-        .map(index => String.fromCharCode(allowed[index]))
-        .join('');
-}
+const { randomHex } = require('./utils.js');
 
 const persistence = () => {
     const accounts = {};
@@ -16,6 +8,7 @@ const persistence = () => {
     const set = ({ address, runtimeCode, balance = 0 }) => {
         // pathToWasm ?
         address = address || randomHex(40);
+        if (accounts[address]) throw new Error('Address already exists');
         runtimeCode = runtimeCode || new Uint8Array(0);
         accounts[address] = { runtimeCode, balance };
         return address;

@@ -1,9 +1,11 @@
+const { ethers } = require('ethers');
 const {
     persistence: initPersistence,
     blocks: initBlocks,
     logs: initLogs,
 } = require('./persistence.js');
 const {
+    encodeWithSignature,
     encode,
     decode,
     logu8a,
@@ -11,22 +13,37 @@ const {
     hexToUint8Array,
     newi32,
     newi64,
+    randomHex,
 }  = require('./utils.js');
 
 const persistence = initPersistence();
 const blocks = initBlocks();
 const chainlogs = initLogs();
 
-const initialize =  (wasmHexSource, wabi)  => {
-    return initializeWrap(hexToUint8Array(wasmHexSource), wabi);
+const deploy = (wasmHexSource, wabi) => async (...args) => {
+    const constructori = initializeWrap(hexToUint8Array(wasmHexSource), wabi, null, false);
+    // TODO: constructor args
+    const txInfo = args[args.length - 1];
+    const address = await constructori.main(txInfo);
+    const instance = runtime(address, wabi);
+    return instance;
 }
 
-const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
+const runtime = (address, wabi) => {
+    const runtimeCode = persistence.get(address).runtimeCode;
+    return initializeWrap(runtimeCode, wabi, address, true);
+}
+
+const runtimeSim = (wasmHexSource, wabi, address) => {
+    address = address || '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+    return initializeWrap(hexToUint8Array(wasmHexSource), wabi, address, true);
+}
+
+const initializeWrap =  (wasmbin, wabi, address, runtime = false) => {
     const storageMap = new WebAssembly.Memory({ initial: 2 }); // Size is in pages.
     const wmodule = new WebAssembly.Module(wasmbin);
-    let address;
-    if (runtime) address = persistence.set({ runtimeCode: wasmbin });
     const block = blocks.set();
+    address = address || randomHex(40);
 
     let currentPromise;
 
@@ -42,14 +59,13 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
     const finishAction = answ => {
         if (!currentPromise) throw new Error('No queued promise found.');
         if (currentPromise.name === 'constructor') {
-            const newabi = wabi.filter(abi => abi.name !== 'constructor');
-            const newmodule = initializeWrap(answ, newabi, true);
+            persistence.set({ runtimeCode: answ, address });
             transferValue(
                 currentPromise.txInfo.from,
-                newmodule.address,
+                address,
                 currentPromise.txInfo.value,
             )
-            currentPromise.resolve(newmodule);
+            currentPromise.resolve(address);
         } else {
             const decoded = decode(answ, wabi.find(abi => abi.name === currentPromise.name).outputs);
             currentPromise.resolve(decoded);
@@ -100,34 +116,53 @@ const initializeWrap =  (wasmbin, wabi, runtime = false)  => {
     );
     minstance = new WebAssembly.Instance(wmodule, importObj);
     
-    const wrappedMain = (...input) => new Promise((resolve, reject) => {
+    const wrappedMain = (signature, fabi) => (...input) => new Promise((resolve, reject) => {
         if (currentPromise) throw new Error('No queue implemented. Come back later.');
-        
-        const fname = runtime ? 'main' : (wabi.find(abi => abi.name === 'constructor') ? 'constructor' : 'main');
+        let fname;
+        if (!runtime) fname = 'constructor';
+        else fname = fabi ? fabi.name : 'main';
+
         const args = input.slice(0, input.length - 1);
         const txInfo = input[input.length - 1];
         txInfo.origin = txInfo.origin || txInfo.from;
         txInfo.value = txInfo.value || 0;
 
         const calldataTypes = (wabi.find(abi => abi.name === fname) || {}).inputs;
+        const calldata = signature ? encodeWithSignature(signature, args, calldataTypes) : encode(args, calldataTypes);
         currentPromise = {
             resolve,
             reject,
             name: fname,
             txInfo,
             gas: {limit: txInfo.gasLimit, price: txInfo.gasPrice, used: 0},
-            calldata: encode(args, calldataTypes),
+            calldata,
         };
         minstance.exports.main(...args);
     });
 
-    return {
+    const wrappedInstance = {
         instance: minstance,
-        main: wrappedMain,
+        main: wrappedMain(),
         address,
         abi: wabi,
         bin: wasmbin,
     }
+
+    wabi.forEach(method => {
+        if (method.name === 'constructor') return;
+        if (method.type === 'fallback') {
+            wrappedInstance[method.name] = wrappedMain();
+        } else {
+            const signature = ethers.utils.id(signatureFull(method)).substring(0, 10);
+            wrappedInstance[method.name] = wrappedMain(signature, method);
+        }
+    })
+
+    return wrappedInstance;
+}
+
+const signatureFull = fabi => {
+    return `${fabi.name}(${fabi.inputs.map(inp => inp.type).join(',')})`;
 }
 
 const initializeEthImports = (
@@ -469,4 +504,4 @@ const getLogs = () => chainlogs;
 // dev purposes:
 const getPersistence = () => persistence;
 
-module.exports = {initialize, getBlock, getLogs, getPersistence};
+module.exports = {deploy, runtime, runtimeSim, getBlock, getLogs, getPersistence};

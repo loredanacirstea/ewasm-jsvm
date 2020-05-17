@@ -25,6 +25,6 @@
     "jest": "^26.0.1"
   },
   "dependencies": {
-    "solc": "^0.6.7"
+    "ethers": "^4.0.47"
   }
 }
