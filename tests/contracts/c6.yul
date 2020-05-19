@@ -14,8 +14,9 @@ object "TestWasm6" {
             // getExternalBalance i32
             let account := mload(_calldata)
             mstore(_data, balance(account))
+            mstore(add(_data, 32), 88)
 
-            return (_data, 32)
+            return (_data, 64)
         }
     }
 }

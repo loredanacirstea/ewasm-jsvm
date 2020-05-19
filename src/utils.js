@@ -12,6 +12,7 @@ const sizeMap = {
 const typeDecode = {
     address: uint8arr => '0x' + uint8ArrayToHex(uint8arr).substring(24),
     bytes32: uint8arr => '0x' + uint8ArrayToHex(uint8arr),
+    bytes: uint8arr => '0x' + uint8ArrayToHex(uint8arr),
     default: uint8arr =>  uint8arr.reverse().reduce((accum, val, i) => accum + val * Math.pow(256, i), 0),
 }
 

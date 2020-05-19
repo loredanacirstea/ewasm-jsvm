@@ -137,7 +137,7 @@ const initializeWrap =  (wasmbin, wabi, address, runtime = false) => {
             gas: {limit: txInfo.gasLimit, price: txInfo.gasPrice, used: 0},
             calldata,
         };
-        minstance.exports.main(...args);
+        minstance.exports.main();
     });
 
     const wrappedInstance = {
