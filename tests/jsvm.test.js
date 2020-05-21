@@ -186,7 +186,7 @@ it('test utils', async function () {
 });
 
 it('test c1', async function () {
-    const ewmodule = ewasmjsvm.runtimeSim(contracts.c1.bin, c1Abi);
+    const ewmodule = await ewasmjsvm.runtimeSim(contracts.c1.bin, c1Abi);
     deployments.c1 = ewmodule;
     const answ = await ewmodule.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(0xeeeeeeeeeeeeee);
@@ -307,7 +307,7 @@ it('test c7 - create', async function () {
     expect(createdContract.balance).toBe(tx_info.value);
     expect(createdContract.runtimeCode).not.toBeNull();
 
-    const cinstance = ewasmjsvm.runtimeSim(createdContract.runtimeCode, [c2Abi[1]], addr);
+    const cinstance = await ewasmjsvm.runtimeSim(createdContract.runtimeCode, [c2Abi[1]], addr);
     const answ = await cinstance.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(999999);
 });
@@ -322,7 +322,7 @@ it('test c7b - create from calldata', async function () {
     expect(createdContract.balance).toBe(tx_info.value);
     expect(createdContract.runtimeCode).not.toBeNull();
 
-    const cinstance = ewasmjsvm.runtimeSim(createdContract.runtimeCode, [c2Abi[1]])
+    const cinstance = await ewasmjsvm.runtimeSim(createdContract.runtimeCode, [c2Abi[1]])
     const answ = await cinstance.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(0xeeeeeeeeeeeeee);
 });
@@ -345,14 +345,13 @@ it('test c8 selfDestruct', async function () {
     expect(ewasmjsvm.getPersistence().get(runtime.address)).toBeUndefined();
 });
 
-// TODO
-it('test c9 calls', async function () {
+it.skip('test c9 calls', async function () {
     const runtime = await ewasmjsvm.deploy(contracts.c9.bin, c9Abi)(DEFAULT_TX_INFO);
     deployments.c9 = runtime;
 
     const calldata = deployments.c2.address;
     const answ = await runtime.main(calldata, DEFAULT_TX_INFO);
-    // expect(answ.val).toBe(999999);
+    expect(answ.val).toBe(1);
 });
 
 it('test c10', async function () {
@@ -409,7 +408,7 @@ it.skip('test c11', async function () {
 });
 
 it.skip('test c12', async function () {
-    const ewmodule = ewasmjsvm.runtimeSim(contracts.c12.bin, c1Abi);
+    const ewmodule = await ewasmjsvm.runtimeSim(contracts.c12.bin, c1Abi);
     const answ = await ewmodule.main(DEFAULT_TX_INFO);
     expect(answ.val).toBe(11);
 });

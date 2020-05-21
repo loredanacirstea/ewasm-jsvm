@@ -14,6 +14,7 @@ const {
     newi32,
     newi64,
     randomHex,
+    instantiateWasm,
 }  = require('./utils.js');
 
 const persistence = initPersistence();
@@ -21,11 +22,11 @@ const blocks = initBlocks();
 const chainlogs = initLogs();
 
 const deploy = (wasmHexSource, wabi) => async (...args) => {
-    const constructori = initializeWrap(hexToUint8Array(wasmHexSource), wabi, null, false);
+    const constructori = await initializeWrap(hexToUint8Array(wasmHexSource), wabi, null, false);
     // TODO: constructor args
     const txInfo = args[args.length - 1];
     const address = await constructori.main(txInfo);
-    const instance = runtime(address, wabi);
+    const instance = await runtime(address, wabi);
     return instance;
 }
 
@@ -42,9 +43,8 @@ const runtimeSim = (wasmSource, wabi, address) => {
     return initializeWrap(wasmSource, wabi, address, true);
 }
 
-const initializeWrap =  (wasmbin, wabi, address, runtime = false) => {
+const initializeWrap =  async (wasmbin, wabi, address, runtime = false) => {
     const storageMap = new WebAssembly.Memory({ initial: 2 }); // Size is in pages.
-    const wmodule = new WebAssembly.Module(wasmbin);
     const block = blocks.set();
     address = address || randomHex(40);
 
@@ -117,7 +117,8 @@ const initializeWrap =  (wasmbin, wabi, address, runtime = false) => {
         revertAction,
         transferValue,
     );
-    minstance = new WebAssembly.Instance(wmodule, importObj);
+    const wmodule = await instantiateWasm(wasmbin, importObj);
+    minstance = wmodule.instance;
     
     const wrappedMain = (signature, fabi) => (...input) => new Promise((resolve, reject) => {
         if (currentPromise) throw new Error('No queue implemented. Come back later.');

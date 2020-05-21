@@ -103,6 +103,19 @@ if (isNode) {
     newi64 = value => new WebAssembly.Global({ value: 'i64', mutable: true }, value);
 }
 
+let instantiateWasm = async (wasmbin, importObj) => {
+    if (isNode) {
+        const wmodule = new WebAssembly.Module(wasmbin);
+        const instance = new WebAssembly.Instance(wmodule, importObj);
+        return {instance, module: wmodule};
+    }
+    // For browsers, we use this trick to make the function async and thus,
+    // not hogging the main thread which doesn't allow wasm compilation > 4kb
+    return await WebAssembly.instantiateStreaming(new Promise((resolve, reject) => {
+        resolve(new Response(wasmbin, {status: 200, headers: {"Content-Type": "application/wasm"}}));
+    }), importObj);
+}
+
 // 0061736d - magic number
 // 010000000 - version 1 (little endian)
 const isHexWasm = source => source.substring(0, 8) === '0061736d'
@@ -123,6 +136,7 @@ module.exports = {
     hexToUint8Array,
     newi32,
     newi64,
+    instantiateWasm,
     isHexWasm,
     isBinWasm,
     randomHex,
