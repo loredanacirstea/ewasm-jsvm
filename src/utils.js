@@ -1,3 +1,5 @@
+const { ethers } = require('ethers');
+
 const isNode = typeof process !== 'undefined'
     && process.versions != null
     && process.versions.node != null;
@@ -32,11 +34,9 @@ const strip0x = hexString => {
     return hexString.slice(0, 2) === '0x' ? hexString.slice(2) : hexString;
 }
 
-const hexToUint8Array = hexString => {
-    hexString = strip0x(hexString);
-    if (hexString.length % 2 === 1) hexString = '0' + hexString;
-    return Uint8Array.from(Buffer.from(hexString, 'hex'));
-}
+const evenHex = hexString => (hexString.length % 2 === 1) ? '0' + hexString : hexString;
+
+const hexToUint8Array = hexString => ethers.utils.arrayify('0x' + evenHex(strip0x(hexString)));
 
 const uint8ArrayToHex = uint8arr => {
     let hexv = '';

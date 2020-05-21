@@ -34,9 +34,12 @@ const runtime = (address, wabi) => {
     return initializeWrap(runtimeCode, wabi, address, true);
 }
 
-const runtimeSim = (wasmHexSource, wabi, address) => {
+const runtimeSim = (wasmSource, wabi, address) => {
+    if (typeof wasmSource === 'string') {
+        wasmSource = hexToUint8Array(wasmSource);
+    }
     address = address || '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-    return initializeWrap(hexToUint8Array(wasmHexSource), wabi, address, true);
+    return initializeWrap(wasmSource, wabi, address, true);
 }
 
 const initializeWrap =  (wasmbin, wabi, address, runtime = false) => {
