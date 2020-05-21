@@ -2,6 +2,12 @@
 
 ewasm virtual machine for javascript
 
+Specs: https://github.com/ewasm/design/blob/master/eth_interface.md.
+
+## Browser
+
+A limited (Ethereum interface methods with args of type `i64` are not supported by browsers), but easier to use version of the ewasm-jsvm can be found at https://observablehq.com/@loredanacirstea/ewasmjsvm. 
+
 ## Development
 
 ```
