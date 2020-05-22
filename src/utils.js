@@ -4,32 +4,6 @@ const isNode = typeof process !== 'undefined'
     && process.versions != null
     && process.versions.node != null;
 
-const sizeMap = {
-    // bytes
-    bytes32: 32,
-    address: 20,
-    u128: 16,  // 128 bit number, represented as a 16 bytes long little endian unsigned integer in memory
-    u256: 32, // 256 bit number, represented as a 32 bytes long little endian unsigned integer in memory
-}
-const typeDecode = {
-    address: uint8arr => '0x' + uint8ArrayToHex(uint8arr).substring(24),
-    bytes32: uint8arr => '0x' + uint8ArrayToHex(uint8arr),
-    bytes: uint8arr => '0x' + uint8ArrayToHex(uint8arr),
-    default: uint8arr =>  uint8arr.reverse().reduce((accum, val, i) => accum + val * Math.pow(256, i), 0),
-}
-
-const leftPadEnc = (value, size) => value.toString(16).padStart(size * 2, '0');
-const typeEncode = {
-    uint: leftPadEnc,
-    uint256: leftPadEnc,
-    int: leftPadEnc,
-    int256: leftPadEnc,
-    address: (value, size) => value.padStart(size * 2, '0'),
-    bytes32: (value, size) => value.padEnd(size * 2, '0'),
-    bytes4: value => value,
-    bytes: value => value,
-}
-
 const strip0x = hexString => {
     return hexString.slice(0, 2) === '0x' ? hexString.slice(2) : hexString;
 }
@@ -38,48 +12,18 @@ const evenHex = hexString => (hexString.length % 2 === 1) ? '0' + hexString : he
 
 const hexToUint8Array = hexString => ethers.utils.arrayify('0x' + evenHex(strip0x(hexString)));
 
-const uint8ArrayToHex = uint8arr => {
-    let hexv = '';
-    uint8arr.forEach(value => {
-        hexv += value.toString(16).padStart(2, '0')
-    });
-    return hexv;
+const uint8ArrayToHex = uint8arr => ethers.utils.hexlify(uint8arr);
+
+const decode = (types, uint8arr) => ethers.utils.defaultAbiCoder.decode(types, uint8ArrayToHex(uint8arr));
+
+const encode = (types, args) => {
+    const encoded = ethers.utils.defaultAbiCoder.encode(types, args);
+    return hexToUint8Array(encoded);
 }
 
-const decode = (uint8arr, types) => {
-    let offset = 0;
-    let result = {};
-    const values = types.forEach(abi => {
-        // const size = sizeMap[abi.type];
-        const size = 32;
-        const value = (typeDecode[abi.type] || typeDecode.default)(uint8arr.slice(offset, offset + size));
-        
-        offset += size;
-        result[abi.name] = value;
-    });
-    return result;
-}
-
-const encode = (args, types) => {
-    if (args.length !== types.length) {
-        throw new Error('Values and types do not have the same length.')
-    }
-    const encoded = types.map((typedef, i) => {
-        const size = 32;
-        return typeEncode[typedef.type](strip0x(args[i]), size)
-    });
-    return hexToUint8Array(encoded.join(''));
-}
-
-const encodeWithSignature = (signature, args, types) => {
-    if (args.length !== types.length) {
-        throw new Error('Values and types do not have the same length.')
-    }
-    const encoded = types.map((typedef, i) => {
-        const size = 32;
-        return typeEncode[typedef.type](strip0x(args[i]), size)
-    });
-    return hexToUint8Array(signature + encoded.join(''));
+const encodeWithSignature = (signature, types, args) => {
+    const encoded = ethers.utils.defaultAbiCoder.encode(types, args);
+    return hexToUint8Array(signature + encoded.substring(2));
 }
 
 const randomHex = (size) => {
@@ -91,6 +35,9 @@ const randomHex = (size) => {
         .map(index => String.fromCharCode(allowed[index]))
         .join('');
 }
+
+const randomAddress = () => randomHex(40);// ethers.utils.getAddress(randomHex(40))
+const randomHash = () => randomHex(64);
 
 const logu8a = uint8arr => `${uint8arr.join('')}, ${uint8arr.length}`;
 
@@ -126,8 +73,6 @@ const isBinWasm = uint8Array => uint8Array[0] === 0 && uint8Array[1] === 97 && u
 
 module.exports = {
     strip0x,
-    typeDecode,
-    typeEncode,
     encodeWithSignature,
     encode,
     decode,
@@ -140,4 +85,6 @@ module.exports = {
     isHexWasm,
     isBinWasm,
     randomHex,
+    randomHash,
+    randomAddress,
 }

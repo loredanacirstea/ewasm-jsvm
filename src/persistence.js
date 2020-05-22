@@ -1,13 +1,13 @@
-const { randomHex } = require('./utils.js');
+const { randomHash, randomAddress } = require('./utils.js');
 
-const persistence = () => {
+const persistenceMock = () => {
     const accounts = {};
 
     const get = address => accounts[address];
 
     const set = ({ address, runtimeCode, balance = 0 }) => {
         // pathToWasm ?
-        address = address || randomHex(40);
+        address = address || randomAddress();
         if (accounts[address]) throw new Error('Address already exists');
         runtimeCode = runtimeCode || new Uint8Array(0);
         accounts[address] = { runtimeCode, balance };
@@ -41,10 +41,10 @@ const blocks = () => {
             number: count,
             timestamp: (new Date()).getTime(),
             // mock
-            hash: randomHex(64),
+            hash: randomHash(),
             difficulty: 2307651677621404,
             gasLimit: 8000000,
-            coinbase: randomHex(40),
+            coinbase: randomAddress(),
         }
         blocks.push(block);
         blocksByHash[block.hash] = count;
@@ -81,4 +81,4 @@ const logs = () => {
     return { set, getBlockLogs, getLogs };
 }
 
-module.exports = { persistence, blocks, logs };
+module.exports = { persistence: persistenceMock, blocks, logs };

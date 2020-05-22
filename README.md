@@ -43,5 +43,5 @@ const answ = await runtime.main(DEFAULT_TX_INFO);
 For contracts with functions, check out the `c10` contract, abi & test:
 ```
 const runtime = await ewasmjsvm.deploy(contracts.c10.bin, c10Abi)(DEFAULT_TX_INFO);
-let answ = await runtime.sum('0x08', '0x02', DEFAULT_TX_INFO);
+let answ = await runtime.sum(8, 2, DEFAULT_TX_INFO);
 ```
