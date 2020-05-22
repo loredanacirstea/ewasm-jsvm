@@ -13,7 +13,7 @@ const {
     hexToUint8Array,
     newi32,
     newi64,
-    randomHex,
+    randomAddress,
     instantiateWasm,
 }  = require('./utils.js');
 
@@ -46,7 +46,7 @@ const runtimeSim = (wasmSource, wabi, address) => {
 const initializeWrap =  async (wasmbin, wabi, address, runtime = false) => {
     const storageMap = new WebAssembly.Memory({ initial: 2 }); // Size is in pages.
     const block = blocks.set();
-    address = address || randomHex(40);
+    address = address || randomAddress();
 
     let currentPromise;
 
@@ -70,7 +70,7 @@ const initializeWrap =  async (wasmbin, wabi, address, runtime = false) => {
             )
             currentPromise.resolve(address);
         } else {
-            const decoded = decode(answ, wabi.find(abi => abi.name === currentPromise.name).outputs);
+            const decoded = answ ? decode(wabi.find(abi => abi.name === currentPromise.name).outputs, answ) : answ;
             currentPromise.resolve(decoded);
         }
         currentPromise = null;
@@ -119,34 +119,41 @@ const initializeWrap =  async (wasmbin, wabi, address, runtime = false) => {
     );
     const wmodule = await instantiateWasm(wasmbin, importObj);
     minstance = wmodule.instance;
+
+    const getfname = (fabi) => !runtime ? 'constructor' : (fabi ? fabi.name : 'main');
     
-    const wrappedMain = (signature, fabi) => (...input) => new Promise((resolve, reject) => {
+    const wrappedMainRaw = (fabi) => (calldata, txInfo) => new Promise((resolve, reject) => {
         if (currentPromise) throw new Error('No queue implemented. Come back later.');
-        let fname;
-        if (!runtime) fname = 'constructor';
-        else fname = fabi ? fabi.name : 'main';
+        const fname = getfname(fabi);
 
-        const args = input.slice(0, input.length - 1);
-        const txInfo = input[input.length - 1];
-        txInfo.origin = txInfo.origin || txInfo.from;
-        txInfo.value = txInfo.value || 0;
-
-        const calldataTypes = (wabi.find(abi => abi.name === fname) || {}).inputs;
-        const calldata = signature ? encodeWithSignature(signature, args, calldataTypes) : encode(args, calldataTypes);
         currentPromise = {
             resolve,
             reject,
             name: fname,
             txInfo,
             gas: {limit: txInfo.gasLimit, price: txInfo.gasPrice, used: 0},
-            calldata,
+            calldata: typeof calldata === 'string' ? hexToUint8Array(calldata) : calldata,
         };
         minstance.exports.main();
     });
 
+    const wrappedMain = (signature, fabi) => (...input) => {
+        const fname = getfname(fabi);
+        const args = input.slice(0, input.length - 1);
+        const txInfo = input[input.length - 1];
+        txInfo.origin = txInfo.origin || txInfo.from;
+        txInfo.value = txInfo.value || 0;
+
+        const calldataTypes = (wabi.find(abi => abi.name === fname) || {}).inputs;
+        const calldata = signature ? encodeWithSignature(signature, calldataTypes, args) : encode(calldataTypes, args);
+        
+        return wrappedMainRaw(fabi) (calldata, txInfo);
+    }
+
     const wrappedInstance = {
         instance: minstance,
         main: wrappedMain(),
+        mainRaw: wrappedMainRaw(),
         address,
         abi: wabi,
         bin: wasmbin,
@@ -236,7 +243,7 @@ const initializeEthImports = (
                 // TOBEDONE FIXME
 
                 let address = loadMemory(addressOffset_i32ptr, 32);
-                address = '0x' + uint8ArrayToHex(address).substring(0, 40);
+                address = uint8ArrayToHex(address).substring(0, 42);
                 // const size = 16;
                 const size = 32;
                 const balance = new Uint8Array(size);
@@ -399,7 +406,7 @@ const initializeEthImports = (
             ) {
                 // DONE_1
                 let address = loadMemory(addressOffset_i32ptr_address, 32);
-                address = '0x' + uint8ArrayToHex(address).substring(0, 40);
+                address = uint8ArrayToHex(address).substring(0, 42);
                 const codeSlice = persistence.get(address).runtimeCode.slice(codeOffset_i32, codeOffset_i32 + dataLength_i32);
                 storeMemory(codeSlice, resultOffset_i32ptr_bytes, dataLength_i32);
             },
@@ -407,7 +414,7 @@ const initializeEthImports = (
             getExternalCodeSize: function (addressOffset_i32ptr_address) {
                 // DONE_1
                 let address = loadMemory(addressOffset_i32ptr_address, 32);
-                address = '0x' + uint8ArrayToHex(address).substring(0, 40);
+                address = uint8ArrayToHex(address).substring(0, 42);
                 return newi32(persistence.get(address).runtimeCode.length);
             },
             // result gasLeft i64
@@ -483,7 +490,7 @@ const initializeEthImports = (
             selfDestruct: function (addressOffset_i32ptr_address) {
                 // DONE_1
                 let toAddress = loadMemory(addressOffset_i32ptr_address, 32);
-                toAddress = '0x' + uint8ArrayToHex(toAddress).substring(0, 40);
+                toAddress = uint8ArrayToHex(toAddress).substring(0, 42);
 
                 const fromAddress = getAddress();
                 transferValue(
