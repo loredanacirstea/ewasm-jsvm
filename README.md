@@ -8,6 +8,8 @@ Specs: https://github.com/ewasm/design/blob/master/eth_interface.md.
 
 ## Use
 
+Needs peer dependencies: `npm install ethers --save`.
+
 ```
 npm install ewasm-jsvm --save
 ```
