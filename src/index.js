@@ -21,8 +21,8 @@ const persistence = initPersistence();
 const blocks = initBlocks();
 const chainlogs = initLogs();
 
-const deploy = (wasmHexSource, wabi) => async (...args) => {
-    const constructori = await initializeWrap(hexToUint8Array(wasmHexSource), wabi, null, false);
+const deploy = (wasmSource, wabi) => async (...args) => {
+    const constructori = await initializeWrap(wasmSource, wabi, null, false);
     // TODO: constructor args
     const txInfo = args[args.length - 1];
     const address = await constructori.main(txInfo);
@@ -36,14 +36,12 @@ const runtime = (address, wabi) => {
 }
 
 const runtimeSim = (wasmSource, wabi, address) => {
-    if (typeof wasmSource === 'string') {
-        wasmSource = hexToUint8Array(wasmSource);
-    }
     address = address || '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
     return initializeWrap(wasmSource, wabi, address, true);
 }
 
 const initializeWrap =  async (wasmbin, wabi, address, runtime = false) => {
+    wasmbin = typeof wasmbin === 'string' ? hexToUint8Array(wasmbin) : wasmbin;
     const storageMap = new WebAssembly.Memory({ initial: 2 }); // Size is in pages.
     const block = blocks.set();
     address = address || randomAddress();
