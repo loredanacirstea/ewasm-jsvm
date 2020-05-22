@@ -1,9 +1,11 @@
 {
   "name": "ewasm-jsvm",
-  "version": "1.0.0",
+  "version": "0.0.2",
   "description": "\"ewasm virtual machine for javascript\"",
   "main": "src/index.js",
+  "browser": "dist/main.js",
   "scripts": {
+    "build": "webpack --config webpack.config.js",
     "test": "node --experimental-vm-modules --experimental-wasm-bigint node_modules/jest/bin/jest.js"
   },
   "repository": {
@@ -15,6 +17,10 @@
     "javascript",
     "ethereum"
   ],
+  "files": [
+    "dist/*",
+    "src/*"
+  ],
   "author": "Loredana Cirstea <loredana.cirstea@gmail.com>",
   "license": "GPL-3.0-or-later",
   "bugs": {
@@ -22,9 +28,11 @@
   },
   "homepage": "https://github.com/loredanacirstea/ewasm-jsvm#readme",
   "devDependencies": {
-    "jest": "^26.0.1"
+    "jest": "^26.0.1",
+    "webpack": "^4.43.0",
+    "webpack-cli": "^3.3.11"
   },
-  "dependencies": {
+  "peerDependencies": {
     "ethers": "^4.0.47"
   }
 }
