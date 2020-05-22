@@ -4,9 +4,21 @@ ewasm virtual machine for javascript
 
 Specs: https://github.com/ewasm/design/blob/master/eth_interface.md.
 
-## Browser
+**! Use it only for testing. Not production ready.**
 
-A limited (Ethereum interface methods with args of type `i64` are not supported by browsers), but easier to use version of the ewasm-jsvm can be found at https://observablehq.com/@loredanacirstea/ewasmjsvm. 
+## Use
+
+```
+npm install ewasm-jsvm --save
+```
+
+### Node
+
+For `i64` support, use a Node.js version which supports the `--experimental-wasm-bigint` flag. E.g. `v13.10.1`
+
+### Browser
+
+A limited (Ethereum interface methods with args of type `i64` are not supported by browsers), but easier to use version of the ewasm-jsvm can be found at https://observablehq.com/@loredanacirstea/ewasmjsvm.
 
 ## Development
 
