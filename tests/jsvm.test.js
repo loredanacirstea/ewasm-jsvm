@@ -355,7 +355,7 @@ it('test c8 selfDestruct', async function () {
     expect(ewasmjsvm.getPersistence().get(runtime.address).runtimeCode).toBeUndefined();
 });
 
-it.skip('test c9 calls', async function () {
+it('test c9 calls', async function () {
     const runtime = await ewasmjsvm.deploy(contracts.c9.bin, c9Abi)(DEFAULT_TX_INFO);
     deployments.c9 = runtime;
 
@@ -364,7 +364,7 @@ it.skip('test c9 calls', async function () {
     expect(answ.val.toNumber()).toBe(999999);
 });
 
-it('test c10', async function () {
+it('test c10 - for loop', async function () {
     const runtime = await ewasmjsvm.deploy(contracts.c10.bin, c10Abi)(DEFAULT_TX_INFO);
     let answ = await runtime.sum(8, 2, DEFAULT_TX_INFO);
     expect(answ.c.toNumber()).toBe(10);
@@ -411,16 +411,10 @@ it.skip('test taylor', async function () {
     // expect(answ.result).toBe('0xee000001000000081100000400000000');
 });
 
-it.skip('test c11', async function () {
+it('test c11', async function () {
     const runtime = await ewasmjsvm.deploy(contracts.c11.bin, c2Abi)(DEFAULT_TX_INFO);
     let answ = await runtime.main( DEFAULT_TX_INFO);
-    expect(answ.val).toBe(11);
-});
-
-it.skip('test c12', async function () {
-    const ewmodule = await ewasmjsvm.runtimeSim(contracts.c12.bin, c1Abi);
-    const answ = await ewmodule.main(DEFAULT_TX_INFO);
-    expect(answ.val).toBe(11);
+    expect(answ.val.toNumber()).toBe(11);
 });
 
 const postIndex = (str, marker) => {
