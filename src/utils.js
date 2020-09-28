@@ -41,6 +41,8 @@ const randomHash = () => randomHex(64);
 
 const logu8a = uint8arr => `${uint8arr.join('')}, ${uint8arr.length}`;
 
+const extractAddress = uint8arr => uint8ArrayToHex(uint8arr.slice(12));
+
 let newi32, newi64;
 if (isNode) {
     newi32 = value => value;
@@ -87,4 +89,5 @@ module.exports = {
     randomHex,
     randomHash,
     randomAddress,
+    extractAddress,
 }

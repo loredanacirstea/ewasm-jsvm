@@ -30,9 +30,7 @@
   "devDependencies": {
     "jest": "^26.0.1",
     "webpack": "^4.43.0",
-    "webpack-cli": "^3.3.11"
-  },
-  "peerDependencies": {
-    "ethers": "^4.0.47"
+    "webpack-cli": "^3.3.11",
+    "ethers": "^5.0.5"
   }
 }
