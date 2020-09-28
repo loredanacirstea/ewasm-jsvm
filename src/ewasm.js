@@ -35,10 +35,8 @@ const runtimeSim = (wasmSource, wabi, address) => {
     return initializeWrap(wasmSource, wabi, address, true);
 }
 
-const initializeWrap =  async (wasmbin, wabi, address, runtime = false) => {
+async function initializeWrap (wasmbin, wabi, address, atRuntime = false) {
     wasmbin = typeof wasmbin === 'string' ? hexToUint8Array(wasmbin) : wasmbin;
-    // address = address || randomAddress();
-
     let currentPromise;
 
     const finishAction = answ => {
@@ -47,7 +45,8 @@ const initializeWrap =  async (wasmbin, wabi, address, runtime = false) => {
             address = jsvmi.deploy(Object.assign({}, currentPromise.txInfo, {data: answ, to: address}));
             currentPromise.resolve(address);
         } else {
-            const decoded = answ ? decode(wabi.find(abi => abi.name === currentPromise.name).outputs, answ) : answ;
+            const abi = wabi.find(abi => abi.name === currentPromise.name);
+            const decoded = answ && abi && abi.outputs ? decode(abi.outputs, answ) : answ;
             currentPromise.resolve(decoded);
         }
         currentPromise = null;
@@ -59,41 +58,83 @@ const initializeWrap =  async (wasmbin, wabi, address, runtime = false) => {
         currentPromise = null;
     }
 
-    const getfname = (fabi) => !runtime ? 'constructor' : (fabi ? fabi.name : 'main');
+    const getfname = (fabi) => !atRuntime ? 'constructor' : (fabi ? fabi.name : 'main');
 
     const wrappedMainRaw = (fabi) => (txInfo) => new Promise((resolve, reject) => {
         if (currentPromise) throw new Error('No queue implemented. Come back later.');
         const fname = getfname(fabi);
-
-        currentPromise = {
-            resolve,
-            reject,
-            name: fname,
-            txInfo,
-            gas: {limit: txInfo.gasLimit, price: txInfo.gasPrice, used: 0},
-            data: typeof txInfo.data === 'string' ? hexToUint8Array(txInfo.data) : txInfo.data,
-        };
-        currentPromise.txInfo.data = currentPromise.data;
-        currentPromise.txInfo.to = address;
-
         let minstance;
-        const getMemory = () => minstance.exports.memory
-        const internalCallWrap = (...data) => {
-            console.log('internalCallWrap', data);
-            return 3;
+
+        const cache = { data: {} };
+        cache.get = index => cache.data[index];
+        cache.set = (index, obj) => cache.data[index] = obj;
+        cache.getAndCheck = (index, obj) => {
+            const data = cache.get(index);
+            if (!data || !data.result) return;
+            Object.keys(data).forEach(key => {
+                if (key !== 'result' && comparify(data[key]) !== comparify(obj[key])) throw new Error(`Cache doesn't match data for key ${key}`);
+            });
+            return data;
         }
 
-        const importObj = initializeEthImports(
-            currentPromise.txInfo,
-            internalCallWrap,
-            getMemory,
-            finishAction,
-            revertAction,
-        );
-        instantiateWasm(wasmbin, importObj).then(wmodule => {
-            minstance = wmodule.instance;
-            minstance.exports.main();
-        });
+        const getMemory = () => minstance.exports.memory
+        const getCache = () => currentPromise.cache;
+        const internalCallWrap = async (index, dataObj) => {
+            const addressHex = extractAddress(dataObj.to);
+            const newtx = {
+                ...currentPromise.txInfo,
+                ...dataObj,
+                to: addressHex,
+            }
+
+            currentPromise.parent = true;
+
+            const wmodule = await runtime(addressHex, []);
+            let result = {};
+            try {
+                result.data = await wmodule.mainRaw(newtx);
+                result.success = 1;
+            } catch (e) {
+                result.success = 0;
+            }
+
+            dataObj.result = result;
+            currentPromise.cache.set(index, dataObj);
+
+            // restart execution from scratch with updated cache
+            // TODO: get gas left and forward it
+            startExecution(wasmbin, currentPromise.txInfo, currentPromise.cache);
+        }
+
+        const startExecution = (_wasmbin, txInfo, cache) => {
+            currentPromise = {
+                resolve,
+                reject,
+                name: fname,
+                txInfo,
+                gas: {limit: txInfo.gasLimit, price: txInfo.gasPrice, used: newi64(0)},
+                data: typeof txInfo.data === 'string' ? hexToUint8Array(txInfo.data) : txInfo.data,
+                cache,
+            };
+            currentPromise.txInfo.data = currentPromise.data;
+            currentPromise.txInfo.to = address;
+
+            const importObj = initializeEthImports(
+                currentPromise.txInfo,
+                internalCallWrap,
+                getMemory,
+                getCache,
+                finishAction,
+                revertAction,
+            );
+
+            instantiateWasm(_wasmbin, importObj).then(wmodule => {
+                minstance = wmodule.instance;
+                minstance.exports.main();
+            });
+        }
+
+        startExecution(wasmbin, txInfo, cache);
     });
 
     const wrappedMain = (signature, fabi) => (...input) => {
@@ -144,10 +185,11 @@ const initializeEthImports = (
     txObj,
     internalCallWrap,
     getMemory,
+    getCache,
     finishAction,
     revertAction,
 ) => {
-    const jsvm_env = jsvmi.call(txObj, internalCallWrap, getMemory);
+    const jsvm_env = jsvmi.call(txObj, internalCallWrap, getMemory, getCache);
     return {
         // i32ptr is u128
         // 33 methods
@@ -233,7 +275,7 @@ const initializeEthImports = (
                 const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
                 console.log('callStatic address', address);
 
-                return jsvm_env.getCallDataSize(gas_limit_i64, address, dataOffset_i32ptr_bytes, dataLength_i32);
+                return jsvm_env.callStatic(gas_limit_i64, address, dataOffset_i32ptr_bytes, dataLength_i32);
             },
             storageStore: function (pathOffset_i32ptr_bytes32, valueOffset_i32ptr_bytes32) {
                 // DONE_1
@@ -397,13 +439,18 @@ const initializeEthImports = (
     }
 }
 
-function readAddress (jsvm_env, addressOffset) {
+function readAddress(jsvm_env, addressOffset) {
     const address = jsvm_env.loadMemory(addressOffset);
-
     // rigth -> left shift
     let lsAddress = new Uint8Array(32);
     lsAddress.set(address.slice(0, 20), 12);
     return lsAddress;
+}
+
+function comparify(value) {
+    if (value instanceof Uint8Array) return uint8ArrayToHex(value);
+    if (value instanceof Object) return JSON.stringify(value);
+    return value;
 }
 
 const getBlock = tag => jsvmi.blocks.get(tag);

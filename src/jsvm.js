@@ -36,14 +36,16 @@ function jsvm() {
         return address;
     }
 
-    const call = (txObj, internalCallWrap, getMemory) => {
+    const call = (txObj, internalCallWrap, getMemory, getCache) => {
         const txInfo = Object.assign({}, txObj);
         txInfo.origin = txInfo.from;
 
+        let lastReturnData;
+
         let gas = {
-            limit: txObj.gasLimit || 1,
+            limit: newi64(txObj.gasLimit || 4000000),
             price: txObj.gasPrice || 1,
-            used: 0,
+            used: newi64(0),
         }
         const getGas = () => gas;
         const useGas = gas => {
@@ -66,6 +68,9 @@ function jsvm() {
             return inst;
         }
 
+        const getReturnData = () => lastReturnData;
+        const setReturnData = (data) => lastReturnData = data;
+
         return internalCall(
             txInfo,
             block,
@@ -73,6 +78,9 @@ function jsvm() {
             getGas,
             useGas,
             getInstance,
+            getReturnData,
+            setReturnData,
+            getCache,
             getMemory || getNewMemory,
         );
     }
@@ -84,8 +92,12 @@ function jsvm() {
         getGas,
         useGas,
         getInstance,
+        getReturnData,
+        setReturnData,
+        getCache,
         getMemory,
     ) => {
+        let currentCacheIndex = 0;
         const storageMap = () => getInstance().storage;
 
         const storeMemory = (bytes, offset, size) => {
@@ -205,14 +217,30 @@ function jsvm() {
                     dataLength_i32,
                 ) {
                     // TOBEDONE NEEDS BR_IF
-                    console.log('callStatic', gas_limit_i64, address, dataOffset_i32ptr_bytes, dataLength_i32)
+                    const data = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
 
-                    let resp = internalCallWrap(gas_limit_i64, address);
-                    console.log('resp', resp);
-                    if(!resp) return newi32(0);
+                    const cache = getCache();
+                    const currentData = {
+                        gasLimit: gas_limit_i64,
+                        to: address,
+                        data,
+                        value: 0,
+                    }
+                    const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
-                    storeMemory(resp, dataOffset_i32ptr_bytes, dataLength_i32);
-                    return newi32(1);
+                    if (!cachedResult) {
+                        internalCallWrap(currentCacheIndex, currentData);
+                        // execution stops here
+                        return;
+                    }
+
+                    currentCacheIndex += 1;
+
+
+                    storeMemory(cachedResult.result.data, dataOffset_i32ptr_bytes, dataLength_i32);
+                    setReturnData(cachedResult.result.data);
+
+                    return newi32(cachedResult.result.success);
                 },
                 storageStore: function (key_uint8array, value_uint8array) {
                     // DONE_1
@@ -352,12 +380,15 @@ function jsvm() {
                 // result dataSize i32
                 getReturnDataSize: function () {
                     // TOBEDONE
-                    console.log('getReturnDataSize')
-                    return newi32(64);
+                    return newi32(getReturnData().length);
                 },
                 returnDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
                     // TOBEDONE
-                    console.log('returnDataCopy', resultOffset_i32ptr_bytes, dataOffset_i32, length_i32)
+                    storeMemory(
+                        getReturnData().slice(dataOffset_i32, dataOffset_i32 + length_i32),
+                        resultOffset_i32ptr_bytes,
+                        length_i32,
+                    );
                 },
                 selfDestruct: function (address) {
                     // DONE_1

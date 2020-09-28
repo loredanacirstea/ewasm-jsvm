@@ -84,7 +84,7 @@ const c8Abi = [
 
 const c9Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [{ name: 'addr', type: 'address'}], outputs: [{ name: 'val', type: 'uint' }]},
+    { name: 'main', type: 'fallback', inputs: [{ name: 'addr', type: 'address'}], outputs: [{ name: 'val', type: 'uint256' }]},
 ]
 
 const c10Abi = [
@@ -361,7 +361,7 @@ it.skip('test c9 calls', async function () {
 
     const calldata = deployments.c2.address;
     const answ = await runtime.main(calldata, DEFAULT_TX_INFO);
-    expect(answ.val).toBe(1);
+    expect(answ.val.toNumber()).toBe(999999);
 });
 
 it('test c10', async function () {
