@@ -79,17 +79,25 @@ async function initializeWrap (wasmbin, wabi, address, atRuntime = false) {
 
         const getMemory = () => minstance.exports.memory
         const getCache = () => currentPromise.cache;
-        const internalCallWrap = async (index, dataObj) => {
+
+        let internalCallTxObj = {};
+        const internalCallWrap = (index, dataObj) => {
             const addressHex = extractAddress(dataObj.to);
+            const valueHex = uint8ArrayToHex(dataObj.value);
             const newtx = {
                 ...currentPromise.txInfo,
                 ...dataObj,
                 to: addressHex,
+                value: valueHex,
             }
 
             currentPromise.parent = true;
+            internalCallTxObj = { index, newtx, dataObj };
+        }
+        const internalCallWrapContinue = async () => {
+            const { index, newtx, dataObj } = internalCallTxObj;
 
-            const wmodule = await runtime(addressHex, []);
+            const wmodule = await runtime(newtx.to, []);
             let result = {};
             try {
                 result.data = await wmodule.mainRaw(newtx);
@@ -130,7 +138,15 @@ async function initializeWrap (wasmbin, wabi, address, atRuntime = false) {
 
             instantiateWasm(_wasmbin, importObj).then(wmodule => {
                 minstance = wmodule.instance;
-                minstance.exports.main();
+                try {
+                    minstance.exports.main();
+                } catch (e) {
+                    console.log(e.message);
+                    if (e.message !== 'Stop & restart') throw e;
+
+                    // wasm execution stopped, so it can be restarted
+                    internalCallWrapContinue();
+                }
             });
         }
 
@@ -142,7 +158,7 @@ async function initializeWrap (wasmbin, wabi, address, atRuntime = false) {
         const args = input.slice(0, input.length - 1);
         const txInfo = input[input.length - 1];
         txInfo.origin = txInfo.origin || txInfo.from;
-        txInfo.value = txInfo.value || 0;
+        txInfo.value = txInfo.value || '0x00';
 
         const calldataTypes = (wabi.find(abi => abi.name === fname) || {}).inputs;
         const calldata = signature ? encodeWithSignature(signature, calldataTypes, args) : encode(calldataTypes, args);
@@ -195,11 +211,9 @@ const initializeEthImports = (
         // 33 methods
         ethereum: {
             useGas: function (amount_i64) {
-                // DONE_1
                 jsvm_env.useGas(amount_i64);
             },
             getAddress: function (resultOffset_i32ptr) {
-                // DONE_1
                 const address = jsvm_env.getAddress();
                 jsvm_env.storeMemory(address, resultOffset_i32ptr);
             },
@@ -211,7 +225,6 @@ const initializeEthImports = (
             },
             // result i32 Returns 0 on success and 1 on failure
             getBlockHash: function (number_i64, resultOffset_i32ptr) {
-                // DONE_1
                 const hash = jsvm_env.getBlockHash(number_i64);
                 jsvm_env.storeMemory(hash, resultOffset_i32ptr);
                 return newi32(0);
@@ -229,12 +242,10 @@ const initializeEthImports = (
                 return newi32(0);
             },
             callDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
-                // DONE_1
                 jsvm_env.callDataCopy(resultOffset_i32ptr_bytes, dataOffset_i32, length_i32);
             },
             // returns i32
             getCallDataSize: function () {
-                // DONE_1
                 return jsvm_env.getCallDataSize();
             },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
@@ -245,7 +256,7 @@ const initializeEthImports = (
                 dataOffset_i32ptr_bytes,
                 dataLength_i32,
             ) {
-                // TOBEDONE NEEDS BR_IF
+                // TOBEDONE
                 console.log('callCode', gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32)
                 const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
                 return newi32(0);
@@ -257,7 +268,7 @@ const initializeEthImports = (
                 dataOffset_i32ptr_bytes,
                 dataLength_i32,
             ) {
-                // TOBEDONE NEEDS BR_IF
+                // TOBEDONE
                 console.log('callDelegate', gas_limit_i64, addressOffset_i32ptr_address, dataOffset_i32ptr_bytes, dataLength_i32)
                 const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
                 return newi32(0);
@@ -268,49 +279,50 @@ const initializeEthImports = (
                 addressOffset_i32ptr_address,
                 dataOffset_i32ptr_bytes,
                 dataLength_i32,
+                outputOffset_i32ptr_bytes,
+                outputLength_i32,
             ) {
-                // TOBEDONE NEEDS BR_IF
-                console.log('callStatic ewasm', gas_limit_i64, addressOffset_i32ptr_address, dataOffset_i32ptr_bytes, dataLength_i32)
+                // TOBEDONE
+                // console.log('callStatic ewasm', gas_limit_i64, addressOffset_i32ptr_address, dataOffset_i32ptr_bytes, dataLength_i32, outputOffset_i32ptr_bytes, outputLength_i32);
 
                 const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
-                console.log('callStatic address', address);
 
-                return jsvm_env.callStatic(gas_limit_i64, address, dataOffset_i32ptr_bytes, dataLength_i32);
+                return jsvm_env.callStatic(
+                    gas_limit_i64,
+                    address,
+                    dataOffset_i32ptr_bytes,
+                    dataLength_i32,
+                    outputOffset_i32ptr_bytes,
+                    outputLength_i32,
+                );
             },
             storageStore: function (pathOffset_i32ptr_bytes32, valueOffset_i32ptr_bytes32) {
-                // DONE_1
                 const key = jsvm_env.loadMemory(pathOffset_i32ptr_bytes32);
                 const value = jsvm_env.loadMemory(valueOffset_i32ptr_bytes32);
                 jsvm_env.storageStore(key, value);
             },
             storageLoad: function (pathOffset_i32ptr_bytes32, resultOffset_i32ptr_bytes32) {
-                // DONE_1
                 const key = jsvm_env.loadMemory(pathOffset_i32ptr_bytes32);
                 const value = jsvm_env.storageLoad(key);
                 jsvm_env.storeMemory(value, resultOffset_i32ptr_bytes32);
             },
             getCaller: function (resultOffset_i32ptr_address) {
-                // DONE_1
                 const address = jsvm_env.getCaller();
                 jsvm_env.storeMemory(address, resultOffset_i32ptr_address);
             },
             getCallValue: function (resultOffset_i32ptr_u128) {
-                // DONE_1
                 const value = jsvm_env.getCallValue();
                 jsvm_env.storeMemory(value, resultOffset_i32ptr_u128);
             },
             codeCopy: function (resultOffset_i32ptr_bytes, codeOffset_i32, length_i32) {
-                // DONE_1
                 jsvm_env.codeCopy(resultOffset_i32ptr_bytes, codeOffset_i32, length_i32);
             },
             // returns i32 - code size current env
             getCodeSize: function() {
-                // DONE_1
                 return jsvm_env.getCodeSize();
             },
             // block’s beneficiary address
             getBlockCoinbase: function(resultOffset_i32ptr_address) {
-                // DONE_1
                 const value = jsvm_env.getBlockCoinbase();
                 jsvm_env.storeMemory(value, resultOffset_i32ptr_address);
             },
@@ -321,7 +333,6 @@ const initializeEthImports = (
                 dataLength_i32,
                 resultOffset_i32ptr_bytes,
             ) {
-                // DONE_1
                 const balance = parseInt(uint8ArrayToHex(
                     jsvm_env.loadMemory(valueOffset_i32ptr_u128, 32)
                 ), 16);
@@ -332,7 +343,6 @@ const initializeEthImports = (
             },
             // returns u256
             getBlockDifficulty: function (resulltOffset_i32ptr_u256) {
-                // DONE_1
                 const value = jsvm_env.getBlockDifficulty();
                 jsvm_env.storeMemory(value, resulltOffset_i32ptr_u256);
             },
@@ -342,7 +352,6 @@ const initializeEthImports = (
                 codeOffset_i32,
                 dataLength_i32,
             ) {
-                // DONE_1
                 const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
                 jsvm_env.externalCodeCopy(
                     address,
@@ -353,22 +362,18 @@ const initializeEthImports = (
             },
             // Returns extCodeSize i32
             getExternalCodeSize: function (addressOffset_i32ptr_address) {
-                // DONE_1
                 const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
                 return jsvm_env.getExternalCodeSize(address);
             },
             // result gasLeft i64
             getGasLeft: function () {
-                // DONE_1
                 return jsvm_env.getGasLeft();
             },
             // result blockGasLimit i64
             getBlockGasLimit: function () {
-                // DONE_1
                 return jsvm_env.getBlockGasLimit();
             },
             getTxGasPrice: function (resultOffset_i32ptr_u128) {
-                // DONE_1
                 const value = jsvm_env.getTxGasPrice();
                 jsvm_env.storeMemory(value, resultOffset_i32ptr_u128);
             },
@@ -397,42 +402,34 @@ const initializeEthImports = (
             },
             // result blockNumber i64
             getBlockNumber: function () {
-                // DONE_1
                 return jsvm_env.getBlockNumber();
             },
             getTxOrigin: function (resultOffset_i32ptr_address) {
-                // DONE_1
                 const address = jsvm_env.getTxOrigin();
                 jsvm_env.storeMemory(address, resultOffset_i32ptr_address);
             },
             finish: function (dataOffset_i32ptr_bytes, dataLength_i32) {
-                // DONE_1
                 const res = jsvm_env.finish(dataOffset_i32ptr_bytes, dataLength_i32);
                 finishAction(res);
             },
             revert: function (dataOffset_i32ptr_bytes, dataLength_i32) {
-                // DONE_1
                 const res = jsvm_env.revert(dataOffset_i32ptr_bytes, dataLength_i32);
                 revertAction(res);
             },
             // result dataSize i32
             getReturnDataSize: function () {
-                // TOBEDONE
                 return jsvm_env.getReturnDataSize();
             },
             returnDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
-                // TOBEDONE
                 jsvm_env.returnDataCopy(resultOffset_i32ptr_bytes, dataOffset_i32, length_i32);
             },
             selfDestruct: function (addressOffset_i32ptr_address) {
-                // DONE_1
                 const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
                 jsvm_env.selfDestruct(address);
                 finishAction();
             },
             // result blockTimestamp i64,
             getBlockTimestamp: function () {
-                // DONE_1
                 return jsvm_env.getBlockTimestamp();
             }
         }

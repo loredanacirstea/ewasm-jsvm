@@ -5,19 +5,27 @@ object "TestWasm9" {
     }
     object "Runtime" {
         code {
-            let _calldata := 64
+            let _calldata := 256
+            mstore(0x40, 448)
 
             calldatacopy(_calldata, 0, calldatasize())
 
             let addr := mslice(add(_calldata, 12), 20)
-            // let addr := mload(_calldata)
-            // let input_ptr := add(_calldata, 20)
 
-            // // callStatic
-            let success := staticcall(gas(), addr, 0, 0, 0, 0)
+            // callStatic
+            let success := staticcall(gas(), addr, add(_calldata, 32), 32, 0, 0)
+            let data1size := returndatasize()
 
-            returndatacopy(0, 0, returndatasize())
-            return (0, returndatasize())
+            returndatacopy(444, 0, data1size)
+
+            let success2 := staticcall(gas(), addr, add(_calldata, 32), 32, 0, 0)
+            let data2size := returndatasize()
+            returndatacopy(add(444, data1size), 0, data2size)
+
+            // add offset & length to create bytes
+            mstore(380, 32)
+            mstore(412, 64)
+            return (380, add(add(data1size, data2size), 64))
 
             function mslice(position, length) -> result {
               if gt(length, 32) { revert(0, 0) }

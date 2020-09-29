@@ -84,6 +84,11 @@ const c8Abi = [
 
 const c9Abi = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
+    { name: 'main', type: 'fallback', inputs: [{ name: 'addr', type: 'address'}, { name: 'addr2', type: 'address'}], outputs: [{ name: 'result', type: 'bytes'}]},
+]
+
+const c9_Abi = [
+    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
     { name: 'main', type: 'fallback', inputs: [{ name: 'addr', type: 'address'}], outputs: [{ name: 'val', type: 'uint256' }]},
 ]
 
@@ -359,9 +364,11 @@ it('test c9 calls', async function () {
     const runtime = await ewasmjsvm.deploy(contracts.c9.bin, c9Abi)(DEFAULT_TX_INFO);
     deployments.c9 = runtime;
 
-    const calldata = deployments.c2.address;
-    const answ = await runtime.main(calldata, DEFAULT_TX_INFO);
-    expect(answ.val.toNumber()).toBe(999999);
+    const runtime_ = await ewasmjsvm.deploy(contracts.c9_.bin, c9_Abi)(DEFAULT_TX_INFO);
+    deployments.c9_ = runtime_;
+
+    const answ = await runtime.main(deployments.c9_.address, deployments.c2.address, DEFAULT_TX_INFO);
+    expect(answ[0]).toBe('0x00000000000000000000000000000000000000000000000000000000000f423f00000000000000000000000000000000000000000000000000000000000f423f');
 });
 
 it('test c10 - for loop', async function () {
