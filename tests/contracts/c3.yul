@@ -7,8 +7,8 @@ object "TestWasm3" {
     object "Runtime" {
         code {
 
-            let _calldata := 512
-            let data_ptr := 1024
+            let _calldata := 96
+            let data_ptr := 256
 
             // callDataCopy
             calldatacopy(_calldata, 0, calldatasize())
@@ -24,6 +24,8 @@ object "TestWasm3" {
             let account := mload(add(_calldata, 32))
             mstore(slotPtr(data_ptr, 2), balance(account))
 
+            log0(slotPtr(data_ptr, 2), 32)
+
             // getCallValue i32
             mstore(slotPtr(data_ptr, 3), callvalue())
 
@@ -35,7 +37,7 @@ object "TestWasm3" {
 
             // getBlockDifficulty
             mstore(slotPtr(data_ptr, 6), difficulty())
-            
+
             // storageStore
             sstore(0, address())
             // storageLoad
@@ -43,6 +45,8 @@ object "TestWasm3" {
 
              // getGasLeft i64
             mstore(slotPtr(data_ptr, 8), gas())
+
+            log2(slotPtr(data_ptr, 8), 32, 55555554, 55555553)
 
             // getBlockHash
             mstore(slotPtr(data_ptr, 9), blockhash(2))
@@ -65,8 +69,10 @@ object "TestWasm3" {
             // getCodeSize
             mstore(slotPtr(data_ptr, 15), codesize())
 
+            log3(slotPtr(data_ptr, 15), 32, 55555552, 55555551, 55555550)
+
             let addr2 := mload(_calldata)
-            
+
             mstore(slotPtr(data_ptr, 16), addr2)
 
             // getExternalCodeSize i32

@@ -1,4 +1,5 @@
 const { ethers } = require('ethers');
+const BN = require('bn.js');
 
 const isNode = typeof process !== 'undefined'
     && process.versions != null
@@ -48,8 +49,8 @@ if (isNode) {
     newi32 = value => value;
     newi64 = value => BigInt(value);
 } else {
-    newi32 = value => new WebAssembly.Global({ value: 'i32', mutable: true }, value);
-    newi64 = value => new WebAssembly.Global({ value: 'i64', mutable: true }, value);
+    newi32 = value => new WebAssembly.Global({ value: 'i32', mutable: true }, value.toString());
+    newi64 = value => new WebAssembly.Global({ value: 'i64', mutable: true }, value.toString());
 }
 
 let instantiateWasm = async (wasmbin, importObj) => {
@@ -73,6 +74,16 @@ const isHexWasm = source => source.substring(0, 8) === '0061736d'
 // [ 0, 97, 115, 109 ]
 const isBinWasm = uint8Array => uint8Array[0] === 0 && uint8Array[1] === 97 && uint8Array[2] === 115 && uint8Array[3] === 109;
 
+const toBN = n => {
+    if (typeof n === 'string' && n.substring(0, 2) === '0x') {
+        return new BN(n.substring(2), 16);
+    }
+    if (BN.isBN(n)) return n;
+    return new BN(n);
+}
+
+const clone = value => JSON.parse(JSON.stringify(value));
+
 module.exports = {
     strip0x,
     encodeWithSignature,
@@ -90,4 +101,6 @@ module.exports = {
     randomHash,
     randomAddress,
     extractAddress,
+    toBN,
+    clone,
 }
