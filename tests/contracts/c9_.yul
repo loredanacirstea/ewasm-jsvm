@@ -13,6 +13,12 @@ object "TestWasm9" {
 
             let success := staticcall(gas(), addr, 0, 0, 0, 0)
             returndatacopy(0, 0, returndatasize())
+
+            // mark the result as passed through c9_
+            let res := mload(0)
+            res := add(res, 10)
+            mstore(0, res)
+
             return (0, returndatasize())
 
             function mslice(position, length) -> result {

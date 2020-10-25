@@ -1,7 +1,11 @@
+const { ERROR } = require('./constants');
+const Logger = require('./config');
 const {
     persistence: initPersistence,
     blocks: initBlocks,
     logs: initLogs,
+    cloneContext,
+    cloneLogs,
 } = require('./persistence.js');
 const {
     uint8ArrayToHex,
@@ -9,6 +13,7 @@ const {
     newi32,
     newi64,
     extractAddress,
+    toBN,
 }  = require('./utils.js');
 
 function jsvm() {
@@ -17,28 +22,45 @@ function jsvm() {
     const blocks = initBlocks();
     const chainlogs = initLogs();
 
-    const transferValue = (from, to, value) => {
-        const fromBalance = persistence.get(from).balance;
-        if (fromBalance < value) throw new Error('Not enough balance.');
+    const transferValue = persistenceApi => (from, to, value) => {
+        Logger.get('jsvm').get('transferValue').debug(from, to, value, typeof value);
+        const parsedValue = toBN(value);
+        const fromBalance = persistenceApi.get(from).balance;
+        if (fromBalance.lt(parsedValue)) throw new Error('Not enough balance.');
 
-        const toBalance = persistence.get(to).balance;
-        persistence.updateBalance(to, toBalance + value);
-        persistence.updateBalance(from, fromBalance - value);
+        const toBalance = persistenceApi.get(to).balance;
+        persistenceApi.updateBalance(to, toBalance.add(parsedValue));
+        persistenceApi.updateBalance(from, fromBalance.sub(parsedValue));
     }
 
-    const deploy = (txObj) => {
-        const address = persistence.set({ runtimeCode: txObj.data, address: txObj.to });
-        transferValue(
-            txObj.from,
-            address,
-            txObj.value,
-        );
-        return address;
-    }
-
-    const call = (txObj, internalCallWrap, getMemory, getCache) => {
+    const call = (txObj, internalCallWrap, asyncResourceWrap, getMemory, getCache) => {
         const txInfo = Object.assign({}, txObj);
         txInfo.origin = txInfo.from;
+
+        Logger.get('jsvm').get('tx').debug('call', txInfo);
+
+        const cache = getCache();
+        const persistenceWrap = initPersistence(cache.context);
+        Logger.get('jsvm').get('persistenceWrap').debug(Object.keys(cache.context));
+        persistenceWrap._get = persistenceWrap.get;
+        persistenceWrap.get = (account) => {
+            if (!account) throw new Error('Account not provided');
+            const result = persistenceWrap._get(account);
+            // if result is not cached
+            if (result.empty) {
+                Logger.get('jsvm').debug('asyncResourceWrap', account);
+                asyncResourceWrap(account);
+                // execution stops here
+                throw new Error(ERROR.ASYNC_RESOURCE);
+            }
+            return result;
+        }
+        const chainlogsWrap = initLogs(cache.logs);
+
+        // Transfer ether if any
+        if (txInfo.value && !toBN(txInfo.value).isZero()) {
+            transferValue(persistenceWrap)(txInfo.from, txInfo.to, txInfo.value);
+        }
 
         let lastReturnData;
 
@@ -60,11 +82,12 @@ function jsvm() {
             return memoryMap;
         }
         const getInstance = () => {
-            const inst = persistence.get(txInfo.to);
-            // constructor
-            if (!inst.runtimeCode) return {
-                runtimeCode: txInfo.data,
-            }
+            const inst = persistenceWrap.get(txInfo.to);
+            // // constructor
+            // if (!inst.runtimeCode) return {
+            //     runtimeCode: txInfo.data,
+            //     storage: {},
+            // }
             return inst;
         }
 
@@ -75,6 +98,9 @@ function jsvm() {
             txInfo,
             block,
             internalCallWrap,
+            persistenceWrap,
+            chainlogsWrap,
+            transferValue(persistenceWrap),
             getGas,
             useGas,
             getInstance,
@@ -89,6 +115,9 @@ function jsvm() {
         txObj,
         block,
         internalCallWrap,
+        persistence,
+        chainlogs,
+        transferValue,
         getGas,
         useGas,
         getInstance,
@@ -111,22 +140,26 @@ function jsvm() {
             return new Uint8Array(res);
         }
         const storageStore = (key, value) => {
-            storageMap()[key] = value;
+            Logger.get('jsvm').get('storage').debug('store', key, value);
+            storageMap()[uint8ArrayToHex(key)] = value;
         }
         const storageLoad = (key) => {
-            return storageMap()[key];
+            Logger.get('jsvm').get('storage').debug('load', key);
+            return storageMap()[uint8ArrayToHex(key)] || hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
         }
 
         const vmapi = {
             // i32ptr is u128
             // 33 methods
                 storeMemory: function (bytes, offset) {
+                    Logger.get('jsvm').get('memory').debug('store', bytes, offset);
                     storeMemory(bytes, offset, 32);
                 },
                 storeMemory8: function (bytes, offset) {
                     storeMemory(bytes, offset, 1);
                 },
                 loadMemory: function (offset) {
+                    Logger.get('jsvm').get('memory').debug('load', offset);
                     return loadMemory(offset, 32);
                 },
                 useGas: function (amount_i64) {
@@ -136,10 +169,13 @@ function jsvm() {
                     const size = 32;
                     const address = new Uint8Array(size);
                     address.set(hexToUint8Array(getInstance().address), size - 20);
+                    Logger.get('jsvm').get('getAddress').debug(address);
                     return address;
                 },
                 getSelfBalance: function () {
-                    return vmapi.getExternalBalance(vmapi.getAddress());
+                    const balance = vmapi.getExternalBalance(vmapi.getAddress());
+                    Logger.get('jsvm').get('getSelfBalance').debug(balance);
+                    return balance;
                 },
                 // result is u128
                 getExternalBalance: function (address) {
@@ -148,6 +184,7 @@ function jsvm() {
                     const balance = new Uint8Array(size);
                     const tightValue = hexToUint8Array(persistence.get(address).balance.toString(16));
                     balance.set(tightValue, size - tightValue.length);
+                    Logger.get('jsvm').get('getExternalBalance').debug(address, balance);
                     return balance;
                 },
                 getBlockHash: function (number) {
@@ -190,13 +227,18 @@ function jsvm() {
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
                     if (!cachedResult) {
-                        internalCallWrap(currentCacheIndex, currentData);
+                        const clonedContext = cloneContext(getCache().context);
+                        const clonedLogs = cloneLogs(getCache().logs);
+                        internalCallWrap(currentCacheIndex, currentData, clonedContext, clonedLogs);
                         // execution stops here
-                        throw new Error('Stop & restart');
+                        throw new Error(ERROR.ASYNC_CALL);
                     }
 
                     currentCacheIndex += 1;
-                    storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+
+                    if (outputOffset_i32ptr_bytes && outputLength_i32) {
+                        storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+                    }
                     setReturnData(cachedResult.result.data);
 
                     return newi32(cachedResult.result.success);
@@ -231,6 +273,8 @@ function jsvm() {
                     outputOffset_i32ptr_bytes,
                     outputLength_i32,
                 ) {
+                    Logger.get('jsvm').get('callStatic').debug(address, dataOffset_i32ptr_bytes, dataLength_i32);
+
                     const data = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
 
                     const cache = getCache();
@@ -242,14 +286,21 @@ function jsvm() {
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
+                    Logger.get('jsvm').get('cachedResult').debug(cachedResult);
+
                     if (!cachedResult) {
-                        internalCallWrap(currentCacheIndex, currentData);
+                        const clonedContext = cloneContext(getCache().context);
+                        const clonedLogs = cloneLogs(getCache().logs);
+                        internalCallWrap(currentCacheIndex, currentData, clonedContext, clonedLogs);
                         // execution stops here
-                        throw new Error('Stop & restart');
+                        throw new Error(ERROR.ASYNC_CALL);
                     }
 
                     currentCacheIndex += 1;
-                    storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+
+                    if (outputOffset_i32ptr_bytes && outputLength_i32) {
+                        storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+                    }
                     setReturnData(cachedResult.result.data);
 
                     return newi32(cachedResult.result.success);
@@ -296,7 +347,8 @@ function jsvm() {
                     dataLength,
                 ) {
                     const runtimeCode = loadMemory(dataOffset, dataLength);
-                    const address = persistence.set({ runtimeCode, balance });
+                    const address = persistence.set({ runtimeCode, balance: toBN(balance) });
+                    Logger.get('jsvm').get('create').debug(address);
 
                     const size = 32;
                     const addrBytes = new Uint8Array(size);
@@ -319,12 +371,14 @@ function jsvm() {
                     dataLength_i32,
                 ) {
                     address = extractAddress(address);
+                    Logger.get('jsvm').get('externalCodeCopy').debug(address);
                     const codeSlice = persistence.get(address).runtimeCode.slice(codeOffset_i32, codeOffset_i32 + dataLength_i32);
                     storeMemory(codeSlice, resultOffset_i32ptr_bytes, dataLength_i32);
                 },
                 // Returns extCodeSize i32
                 getExternalCodeSize: function (address) {
                     address = extractAddress(address);
+                    Logger.get('jsvm').get('getExternalCodeSize').debug(address);
                     return newi32(persistence.get(address).runtimeCode.length);
                 },
                 // result gasLeft i64
@@ -349,7 +403,9 @@ function jsvm() {
                     numberOfTopics_i32,
                     topics,
                 ) {
+                    Logger.get('jsvm').get('log').debug(topics);
                     chainlogs.set({
+                        address: vmapi.getAddress(),
                         blockNumber: block.number,
                         data: loadMemory(dataOffset_i32ptr_bytes, dataLength_i32),
                         topics: topics.slice(0, numberOfTopics_i32),
@@ -385,6 +441,7 @@ function jsvm() {
                 selfDestruct: function (address) {
                     const toAddress = extractAddress(address);
                     const fromAddress = getInstance().address;
+                    Logger.get('jsvm').get('selfDestruct').debug(fromAddress, toAddress);
                     transferValue(
                         fromAddress,
                         toAddress,
@@ -415,7 +472,6 @@ function jsvm() {
         blocks,
         logs: chainlogs,
         call,
-        deploy,
     }
 
 }
