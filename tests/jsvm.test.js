@@ -374,7 +374,7 @@ it('test c8 selfDestruct', async function () {
     expect(ewasmjsvm.getPersistence().get(runtime.address).runtimeCode).toBeUndefined();
 });
 
-it.skip('test c9 calls', async function () {
+it('test c9 calls', async function () {
     const runtime = await ewasmjsvm.deploy(contracts.c9.bin, c9Abi)(DEFAULT_TX_INFO);
     deployments.c9 = runtime;
 
@@ -389,30 +389,33 @@ it('test c10', async function () {
     const runtime = await ewasmjsvm.deploy(contracts.c10.bin, c10Abi)(DEFAULT_TX_INFO);
     deployments.c10 = runtime;
 
-    // let answ = await runtime.sum(8, 2, DEFAULT_TX_INFO);
-    // expect(answ.c.toNumber()).toBe(10);
+    let answ = await runtime.sum(8, 2, DEFAULT_TX_INFO);
+    expect(answ.c.toNumber()).toBe(10);
 
-    // answ = await runtime.testAddress(runtime.address, DEFAULT_TX_INFO);
-    // expect(answ[0].toLowerCase()).toBe(runtime.address);
+    answ = await runtime.testAddress(runtime.address, DEFAULT_TX_INFO);
+    expect(answ[0].toLowerCase()).toBe(runtime.address);
 
-    // let value = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
-    // expect(value).toBe(5);
+    let value = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
+    expect(value).toBe(5);
 
-    // let balance = ewasmjsvm.getPersistence().get(runtime.address).balance.toNumber();
+    let balance = ewasmjsvm.getPersistence().get(runtime.address).balance.toNumber();
 
-    // const newvalue = await runtime.addvalue(10, {...DEFAULT_TX_INFO, value: 40});
-    // value += 50;
-    // expect(newvalue[0].toNumber()).toBe(value);
+    const newvalue = await runtime.addvalue(10, {...DEFAULT_TX_INFO, value: 40});
+    value += 50;
+    expect(newvalue[0].toNumber()).toBe(value);
 
-    // const val = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
-    // expect(val).toBe(value);
+    const val = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
+    expect(val).toBe(value);
 
-    // const newbalance = ewasmjsvm.getPersistence().get(runtime.address).balance.toNumber();
-    // balance += 40;
-    // expect(newbalance).toBe(balance);
+    const newbalance = ewasmjsvm.getPersistence().get(runtime.address).balance.toNumber();
+    balance += 40;
+    expect(newbalance).toBe(balance);
 });
 
-it.skip('test c10 - calls solidity', async function () {
+it('test c10 - calls solidity', async function () {
+    const runtime = await ewasmjsvm.deploy(contracts.c10.bin, c10Abi)(DEFAULT_TX_INFO);
+    deployments.c10 = runtime;
+
     const _runtime = await ewasmjsvm.deploy(contracts.c12.bin, c12Abi)(DEFAULT_TX_INFO);
 
     let value = (await deployments.c10.value(DEFAULT_TX_INFO))[0].toNumber();
@@ -421,11 +424,11 @@ it.skip('test c10 - calls solidity', async function () {
     answ = await _runtime.test_staticcall(deployments.c10.address, 8, 2, DEFAULT_TX_INFO);
     expect(answ.c.toNumber()).toBe(10);
 
-    // answ = await _runtime.test_staticcall_address(deployments.c10.address, deployments.c10.address, DEFAULT_TX_INFO);
-    // expect(answ.c.toHex()).toBe(deployments.c10.address);
+    answ = await _runtime.test_staticcall_address(deployments.c10.address, deployments.c10.address, DEFAULT_TX_INFO);
+    expect(answ.c.toHexString()).toBe(deployments.c10.address);
 
-    // await _runtime.test_call(deployments.c10.address, 10, {...DEFAULT_TX_INFO, value: 40});
-    // const val2 = (await deployments.c10.value(DEFAULT_TX_INFO))[0].toNumber();
+    await _runtime.test_call(deployments.c10.address, 10, {...DEFAULT_TX_INFO, value: 40});
+    const val2 = (await deployments.c10.value({...DEFAULT_TX_INFO}))[0].toNumber();
     // expect(val2).toBe(value + 10 + 40);
 
     // const newbalance2 = ewasmjsvm.getPersistence().get(deployments.c10.address).balance.toNumber();

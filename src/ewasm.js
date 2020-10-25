@@ -60,10 +60,11 @@ async function initializeWrap (wasmbin, wabi=[], address, atRuntime = false) {
         const currentContext = clonedContext[address] || {};
         clonedMemory = hexToUint8Array(uint8ArrayToHex(new Uint8Array(memory.buffer)));
         opcodelogs.push({name, input, output, memory: clonedMemory, logs: clonedLogs, context: clonedContext, contract: currentContext});
+        return;
     });
 
     const storeStateChanges = (context, logs) => {
-        Logger.get('ewasmvm').debug('storeStateChanges', Object.keys(context), logs.length);
+        Logger.get('ewasmvm').get('storeStateChanges').debug(Object.keys(context), logs.length);
         Logger.get('ewasmvm').get('context').debug('storeStateChanges', context);
         Logger.get('ewasmvm').get('logs').debug('storeStateChanges', logs);
         jsvmi.persistence.setBulk(context);
@@ -80,7 +81,7 @@ async function initializeWrap (wasmbin, wabi=[], address, atRuntime = false) {
             currentPromise.resolve(address);
         } else {
             const abi = wabi.find(abi => abi.name === currentPromise.name);
-            Logger.get('ewasmvm').get('finishAction').debug(answ);
+            Logger.get('ewasmvm').get('finishAction').debug(currentPromise.name, answ);
             const decoded = answ && abi && abi.outputs ? decode(abi.outputs, answ) : answ;
             storeStateChanges(currentPromise.cache.context, currentPromise.cache.logs);
             currentPromise.resolve(decoded);
@@ -90,6 +91,7 @@ async function initializeWrap (wasmbin, wabi=[], address, atRuntime = false) {
     const revertAction = answ => {
         if (!currentPromise) return; //  throw new Error('No queued promise found.');
         const error = new Error('Revert: ' + uint8ArrayToHex(answ));
+        Logger.get('ewasmvm').get('revertAction').debug(currentPromise.name, answ);
         currentPromise.reject(error);
         currentPromise = null;
     }
@@ -106,16 +108,20 @@ async function initializeWrap (wasmbin, wabi=[], address, atRuntime = false) {
         Logger.get('ewasmvm').get('tx').debug('wrappedMainRaw--' + fname, txInfo);
 
         // cache is changed in place, by reference
+        // context[address] = {balance, runtimeCode, storage}  // persistence
+        // data[index] = {gaslimit, to, data, value, result}
         const cache = { data: {}, context: existingCache.context || {}, logs: existingCache.logs || [] };
         cache.get = index => cache.data[index];
         cache.set = (index, obj) => cache.data[index] = obj;
         cache.getAndCheck = (index, txobj) => {
-            const data = cache.get(index);
-            if (!data || !data.result || !data.txinfo) return;
-            Object.keys(data.txinfo).forEach(key => {
-                if (key !== 'result' && comparify(data.txinfo[key]) !== comparify(txobj[key])) throw new Error(`Cache doesn't match data for key ${key}`);
+            const cachedtx = cache.get(index);
+            const hexdata = lowtx2hex(txobj)
+
+            if (!cachedtx || !cachedtx.result) return;
+            Object.keys(cachedtx).forEach(key => {
+                if (key !== 'result' && comparify(cachedtx[key]) !== comparify(hexdata[key])) throw new Error(`Cache doesn't match data for key ${key}. Cache: ${cachedtx[key]} vs. ${hexdata[key]}`);
             });
-            return data;
+            return cachedtx;
         }
         cache.context[txInfo.from] = jsvmi.persistence.get(txInfo.from);
         cache.context[txInfo.to] = jsvmi.persistence.get(txInfo.to);
@@ -133,25 +139,22 @@ async function initializeWrap (wasmbin, wabi=[], address, atRuntime = false) {
 
         let internalCallTxObj = {};
         const internalCallWrap = (index, dataObj, context, logs) => {
-            const addressHex = extractAddress(dataObj.to);
-            const valueHex = uint8ArrayToHex(dataObj.value);
             const newtx = {
                 ...currentPromise.txInfo,
-                ...dataObj,
-                to: addressHex,
-                value: valueHex,
+                ...lowtx2hex(dataObj),
             }
 
             currentPromise.parent = true;
-            internalCallTxObj = { index, newtx, dataObj, context, logs };
+            internalCallTxObj = { index, newtx, context, logs };
         }
+
         const internalCallWrapContinue = async () => {
-            const { index, newtx, dataObj, context, logs } = internalCallTxObj;
+            const { index, newtx, context, logs } = internalCallTxObj;
             Logger.get('ewasmvm').get('internalCallWrapContinue').debug(index);
 
             const wmodule = await runtime(newtx.to, []);
             let result = {};
-            currentPromise.cache[index] = {data: dataObj, context, logs}
+            currentPromise.cache.data[index] = newtx;
             try {
                 result.data = await wmodule.mainRaw(newtx, {context, logs});  // TODO pass apropriate cache
                 result.success = 1;
@@ -159,9 +162,7 @@ async function initializeWrap (wasmbin, wabi=[], address, atRuntime = false) {
                 result.success = 0;
             }
 
-            dataObj.result = result;
-            currentPromise.cache[index].data = dataObj;
-
+            currentPromise.cache.data[index].result = result;
             internalCallTxObj = {};
 
             // restart execution from scratch with updated cache
@@ -288,6 +289,17 @@ async function initializeWrap (wasmbin, wabi=[], address, atRuntime = false) {
 
 const signatureFull = fabi => {
     return `${fabi.name}(${fabi.inputs.map(inp => inp.type).join(',')})`;
+}
+
+function lowtx2hex(dataObj) {
+    return {
+        ...dataObj,
+        to: extractAddress(dataObj.to),
+        value: uint8ArrayToHex(dataObj.value),
+        from: extractAddress(dataObj.from),
+        origin: extractAddress(dataObj.origin),
+        // gasLimit, gasPrice? transform to hex
+    }
 }
 
 const initializeEthImports = (

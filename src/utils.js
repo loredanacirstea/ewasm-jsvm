@@ -15,7 +15,10 @@ const hexToUint8Array = hexString => ethers.utils.arrayify('0x' + evenHex(strip0
 
 const uint8ArrayToHex = uint8arr => ethers.utils.hexlify(uint8arr);
 
-const decode = (types, uint8arr) => ethers.utils.defaultAbiCoder.decode(types, uint8ArrayToHex(uint8arr));
+const decode = (types, uint8arr) => {
+    const decoded = ethers.utils.defaultAbiCoder.decode(types, uint8ArrayToHex(uint8arr));
+    return {...decoded};
+}
 
 const encode = (types, args) => {
     const encoded = ethers.utils.defaultAbiCoder.encode(types, args);

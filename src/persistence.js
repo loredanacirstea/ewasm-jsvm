@@ -123,14 +123,18 @@ const cloneStorage = storage => {
     return clonedStorage;
 }
 
+const cloneContract = obj => {
+    return {
+        ...obj,
+        balance: obj.balance.clone(),
+        storage: cloneStorage(obj.storage),
+    }
+}
+
 const cloneContext = (context = {}) => {
     const newcontext = {};
     Object.keys(context).forEach(addr => {
-        newcontext[addr] = {
-            ...context[addr],
-            balance: context[addr].balance.clone(),
-            storage: cloneStorage(context[addr].storage),
-        }
+        newcontext[addr] = cloneContract(context[addr]);
     });
     return newcontext;
 }
@@ -141,4 +145,4 @@ const cloneLog = log => {
 }
 const cloneLogs = logs => logs.map(cloneLog);
 
-module.exports = { persistence: persistenceMock, blocks, logs, cloneContext, cloneLogs };
+module.exports = { persistence: persistenceMock, blocks, logs, cloneContext, cloneLogs, cloneStorage, cloneContract };

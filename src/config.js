@@ -25,6 +25,7 @@ const DEEFAULT_HANDLER = {
 const globalLevel = LEVELS.ERROR;
 
 const printval = val => {
+    if (typeof val === 'string') return val;
     if (val instanceof Uint8Array) return uint8ArrayToHex(val);
     if (val instanceof Object) {
         return '{' + Object.keys(val).map(key => key + ': ' + printval(val[key])).join(', ') + '}';
@@ -38,12 +39,19 @@ const logg = (name, _level, _handler, filterExclude=[], filterInclude=[]) => {
 
     let level = _level || globalLevel;
     const loggers = {};
+    let count = 0;
     let handler = lvl => (...args) => {
         if (ORDER[lvl] <= ORDER[level]) {
             if (filterExclude.some(marker => name.includes(marker))) return;
             if (filterInclude.length > 0 && !filterInclude.some(marker => name.includes(marker))) return;
-            const logged = _handler ? _handler(...args) : args.map(printval).join(', ');
+            let logged;
+            if (_handler) {
+                logged = _handler(...args);
+                if (!logged) return;
+            }
+            if (!logged) logged = args.map(printval).join(', ');
             DEEFAULT_HANDLER[lvl](name, logged);
+            count += 1;
         }
     }
 
@@ -55,13 +63,14 @@ const logg = (name, _level, _handler, filterExclude=[], filterInclude=[]) => {
         error: handler(LEVELS.ERROR),
         setLevel: (newlevel) => level = newlevel,
         spawn: (subname, sublevel, subhandler) => {
-            loggers[subname] = logg(name + '_' + subname, sublevel || level, subhandler);
+            loggers[subname] = logg(name + '_' + subname, sublevel || level, subhandler, filterInclude, filterExclude);
             return loggers[subname];
         },
         get: subname => {
             if (loggers[subname]) return loggers[subname];
             return self.spawn(subname);
-        }
+        },
+        getcount: () => count,
     }
     return self;
 }
@@ -75,12 +84,12 @@ const contexthandler = (msg, txobj) => {
     const printobj = {};
     Object.keys(txobj).forEach(key => {
         const {address, balance, storage, runtimeCode} = txobj[key];
-        printobj[key] = {address, balance, storage, runtimeCode: runtimeCode ? printval(runtimeCode.slice(0, 50)) : null};
+        printobj[key] = {address, balance: balance.toString(), storage, runtimeCode: runtimeCode ? printval(runtimeCode.slice(0, 50)) : null};
     })
     return msg + ' ' + printval(printobj);
 }
 
-const Logger = logg('', LEVELS.SILENT, null, [], []);
+const Logger = logg('', LEVELS.DEBUG, null, [], ['transferValue', 'storeStateChanges', 'context', 'logs', 'call']);
 Logger.spawn('jsvm');
 Logger.spawn('ewasmvm');
 Logger.get('jsvm').spawn('tx', null, txhandler);

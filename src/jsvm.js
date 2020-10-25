@@ -6,6 +6,8 @@ const {
     logs: initLogs,
     cloneContext,
     cloneLogs,
+    cloneStorage,
+    cloneContract,
 } = require('./persistence.js');
 const {
     uint8ArrayToHex,
@@ -214,6 +216,8 @@ function jsvm() {
                     outputOffset_i32ptr_bytes,
                     outputLength_i32,
                 ) {
+                    Logger.get('jsvm').get('call').debug(address, dataOffset_i32ptr_bytes, dataLength_i32);
+
                     const value = loadMemory(valueOffset_i32ptr_u128, 32);
                     const data = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
 
@@ -221,14 +225,135 @@ function jsvm() {
                     const currentData = {
                         gasLimit: gas_limit_i64,
                         to: address,
+                        gasPrice: vmapi.getTxGasPrice(),
+                        from: vmapi.getAddress(),
+                        origin: vmapi.getTxOrigin(),
                         data,
                         value,
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
+                    Logger.get('jsvm').get('call').debug('cachedResult', cachedResult);
+
                     if (!cachedResult) {
                         const clonedContext = cloneContext(getCache().context);
                         const clonedLogs = cloneLogs(getCache().logs);
+                        internalCallWrap(currentCacheIndex, currentData, clonedContext, clonedLogs);
+                        // execution stops here
+                        throw new Error(ERROR.ASYNC_CALL);
+                    }
+
+                    currentCacheIndex += 1;
+
+                    transferValue(
+                        extractAddress(currentData.origin),
+                        extractAddress(currentData.to),
+                        value,
+                    );
+
+                    if (outputOffset_i32ptr_bytes && outputLength_i32) {
+                        storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+                    }
+                    setReturnData(cachedResult.result.data);
+
+                    return newi32(cachedResult.result.success);
+                },
+                // result i32 Returns 0 on success, 1 on failure and 2 on revert
+                // uses the code from address
+                // context from current contract
+                callCode: function (
+                    gas_limit_i64,
+                    addressOffset_i32ptr_address, // the memory offset to load the address from (address)
+                    valueOffset_i32ptr_u128,
+                    dataOffset_i32ptr_bytes,
+                    dataLength_i32,
+                ) {
+                    Logger.get('jsvm').get('callCode').debug(gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32);
+
+                    const value = loadMemory(valueOffset_i32ptr_u128, 32);
+                    const data = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                    const hexaddress = extractAddress(address);
+                    const contract = persistence.get(hexaddress);
+
+                    const cache = getCache();
+                    const currentData = {
+                        gasLimit: gas_limit_i64,
+                        to: address,
+                        gasPrice: vmapi.getTxGasPrice(),
+                        from: vmapi.getAddress(),
+                        origin: vmapi.getTxOrigin(),
+                        data,
+                        value,
+                    }
+                    const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
+
+                    Logger.get('jsvm').get('call').debug('cachedResult', cachedResult);
+
+                    if (!cachedResult) {
+                        const clonedContext = cloneContext(getCache().context);
+                        const clonedLogs = cloneLogs(getCache().logs);
+
+                        // use current context for the contract
+                        clonedContext[hexaddress] = cloneContract(contract)
+                        clonedContext[hexaddress].storage = cloneStorage(storageMap());
+
+                        internalCallWrap(currentCacheIndex, currentData, clonedContext, clonedLogs);
+                        // execution stops here
+                        throw new Error(ERROR.ASYNC_CALL);
+                    }
+
+                    currentCacheIndex += 1;
+
+                    transferValue(
+                        extractAddress(currentData.from),  // from this contract
+                        extractAddress(currentData.to),
+                        value,
+                    );
+
+                    if (outputOffset_i32ptr_bytes && outputLength_i32) {
+                        storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+                    }
+                    setReturnData(cachedResult.result.data);
+
+                    return newi32(cachedResult.result.success);
+                },
+                // result i32 Returns 0 on success, 1 on failure and 2 on revert
+                callDelegate: function (
+                    gas_limit_i64,
+                    addressOffset_i32ptr_address,
+                    dataOffset_i32ptr_bytes,
+                    dataLength_i32,
+                ) {
+                    // identical to a message call except the code at the target address is executed in the context of the calling contract
+                    // msg.sender and msg.value do not change their values.
+                    Logger.get('jsvm').get('callCode').debug(gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32);
+
+                    const data = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                    const hexaddress = extractAddress(address);
+                    const contract = persistence.get(hexaddress);
+
+                    const cache = getCache();
+                    const currentData = {
+                        gasLimit: gas_limit_i64,
+                        to: address,
+                        gasPrice: vmapi.getTxGasPrice(),
+                        from: txObj.from,
+                        origin: vmapi.getTxOrigin(),
+                        data,
+                        value: txObj.value,
+                    }
+                    const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
+
+                    Logger.get('jsvm').get('call').debug('cachedResult', cachedResult);
+
+                    if (!cachedResult) {
+                        const clonedContext = cloneContext(getCache().context);
+                        const clonedLogs = cloneLogs(getCache().logs);
+
+                        // use current context for the contract
+                        clonedContext[hexaddress] = cloneContract(contract)
+                        clonedContext[hexaddress].storage = cloneStorage(storageMap());
+
                         internalCallWrap(currentCacheIndex, currentData, clonedContext, clonedLogs);
                         // execution stops here
                         throw new Error(ERROR.ASYNC_CALL);
@@ -242,27 +367,6 @@ function jsvm() {
                     setReturnData(cachedResult.result.data);
 
                     return newi32(cachedResult.result.success);
-                },
-                // result i32 Returns 0 on success, 1 on failure and 2 on revert
-                callCode: function (
-                    gas_limit_i64,
-                    addressOffset_i32ptr_address, // the memory offset to load the address from (address)
-                    valueOffset_i32ptr_u128,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
-                ) {
-                    throw new Error('callCode not implemented');
-                },
-                // result i32 Returns 0 on success, 1 on failure and 2 on revert
-                callDelegate: function (
-                    gas_limit_i64,
-                    addressOffset_i32ptr_address,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
-                ) {
-                    // identical to a message call except the code at the target address is executed in the context of the calling contract
-                    // msg.sender and msg.value do not change their values.
-                    throw new Error('callCode not implemented');
                 },
                 // result i32 Returns 0 on success, 1 on failure and 2 on revert
                 callStatic: function (
@@ -280,13 +384,16 @@ function jsvm() {
                     const cache = getCache();
                     const currentData = {
                         gasLimit: gas_limit_i64,
+                        gasPrice: vmapi.getTxGasPrice(),
                         to: address,
+                        from: vmapi.getAddress(),
+                        origin: vmapi.getTxOrigin(),
                         data,
                         value: new Uint8Array(0),
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
-                    Logger.get('jsvm').get('cachedResult').debug(cachedResult);
+                    Logger.get('jsvm').get('callStatic').debug('cachedResult', cachedResult);
 
                     if (!cachedResult) {
                         const clonedContext = cloneContext(getCache().context);
