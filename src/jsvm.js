@@ -28,9 +28,10 @@ function jsvm() {
         Logger.get('jsvm').get('transferValue').debug(from, to, value, typeof value);
         const parsedValue = toBN(value);
         const fromBalance = persistenceApi.get(from).balance;
+        const toBalance = persistenceApi.get(to).balance;
+        Logger.get('jsvm').get('transferValue').debug('---', fromBalance, fromBalance.toNumber(), toBalance.toNumber(), parsedValue.toNumber());
         if (fromBalance.lt(parsedValue)) throw new Error('Not enough balance.');
 
-        const toBalance = persistenceApi.get(to).balance;
         persistenceApi.updateBalance(to, toBalance.add(parsedValue));
         persistenceApi.updateBalance(from, fromBalance.sub(parsedValue));
     }

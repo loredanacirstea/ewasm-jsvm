@@ -6,18 +6,18 @@
  *******************************************************/
 
 
-object "c10_56" {
+object "c10_63" {
     code {
         mstore(64, memoryguard(128))
         if callvalue() { revert(0, 0) }
 
-        constructor_c10_56()
+        constructor_c10_63()
 
-        codecopy(0, dataoffset("c10_56_deployed"), datasize("c10_56_deployed"))
+        codecopy(0, dataoffset("c10_63_deployed"), datasize("c10_63_deployed"))
 
-        return(0, datasize("c10_56_deployed"))
+        return(0, datasize("c10_63_deployed"))
 
-        function constructor_c10_56() {
+        function constructor_c10_63() {
 
             let expr_3 := 0x05
             update_storage_value_offset_0t_rational_5_by_1_to_t_uint256(0x00, expr_3)
@@ -47,7 +47,7 @@ object "c10_56" {
         }
 
     }
-    object "c10_56_deployed" {
+    object "c10_63_deployed" {
         code {
             mstore(64, memoryguard(128))
 
@@ -56,23 +56,23 @@ object "c10_56" {
                 let selector := shift_right_224_unsigned(calldataload(0))
                 switch selector
 
-                case 0x388ccbd3
-                {
-                    // addvalue_revert(uint256)
-
-                    let param_0 :=  abi_decode_tuple_t_uint256(4, calldatasize())
-                    let ret_0 :=  fun_addvalue_revert_55(param_0)
-                    let memPos := allocateMemory(0)
-                    let memEnd := abi_encode_tuple_t_uint256__to_t_uint256__fromStack(memPos , ret_0)
-                    return(memPos, sub(memEnd, memPos))
-                }
-
                 case 0x3fa4f245
                 {
                     // value()
                     if callvalue() { revert(0, 0) }
                     abi_decode_tuple_(4, calldatasize())
                     let ret_0 :=  getter_fun_value_4()
+                    let memPos := allocateMemory(0)
+                    let memEnd := abi_encode_tuple_t_uint256__to_t_uint256__fromStack(memPos , ret_0)
+                    return(memPos, sub(memEnd, memPos))
+                }
+
+                case 0x42d7c99e
+                {
+                    // _revert()
+
+                    abi_decode_tuple_(4, calldatasize())
+                    let ret_0 :=  fun__revert_62()
                     let memPos := allocateMemory(0)
                     let memEnd := abi_encode_tuple_t_uint256__to_t_uint256__fromStack(memPos , ret_0)
                     return(memPos, sub(memEnd, memPos))
@@ -226,12 +226,31 @@ object "c10_56" {
                 cleaned := value
             }
 
+            function convert_t_rational_10_by_1_to_t_uint256(value) -> converted {
+                converted := cleanup_t_uint256(value)
+            }
+
             function extract_from_storage_value_dynamicsplit_t_uint256(slot_value, offset) -> value {
                 value := cleanup_from_storage_split_t_uint256(shift_right_unsigned_dynamic(mul(offset, 8), slot_value))
             }
 
             function extract_from_storage_value_offset_0t_uint256(slot_value) -> value {
                 value := cleanup_from_storage_t_uint256(shift_right_0_unsigned(slot_value))
+            }
+
+            function fun__revert_62() -> vloc__50 {
+                let zero_value_for_type_t_uint256_10 := zero_value_for_split_t_uint256()
+                vloc__50 := zero_value_for_type_t_uint256_10
+
+                let _11 := read_from_storage_offset_0_t_uint256(0x00)
+                let expr_53 := _11
+                let expr_54 := 0x0a
+                let expr_55 := checked_add_t_uint256(expr_53, convert_t_rational_10_by_1_to_t_uint256(expr_54))
+
+                update_storage_value_offset_0t_uint256_to_t_uint256(0x00, expr_55)
+                let expr_56 := expr_55
+                revert(0, 0)
+
             }
 
             function fun_addvalue_47(vloc__value_30) -> vloc__33 {
@@ -253,12 +272,6 @@ object "c10_56" {
                 let expr_44 := _9
                 vloc__33 := expr_44
                 leave
-
-            }
-
-            function fun_addvalue_revert_55(vloc__value_49) -> vloc__52 {
-                let zero_value_for_type_t_uint256_10 := zero_value_for_split_t_uint256()
-                vloc__52 := zero_value_for_type_t_uint256_10
 
             }
 

@@ -100,7 +100,7 @@ const c10Abi = [
     { name: 'double', type: 'function', inputs: [{ name: 'a', type: 'uint256'}], outputs: [{ name: 'b', type: 'uint256'}]},
     { name: 'value', type: 'function', inputs: [], outputs: [{ name: 'b', type: 'uint256'}]},
     { name: 'addvalue', type: 'function', inputs: [{ name: '_value', type: 'uint256'}], outputs: [{ name: 'b', type: 'uint256'}]},
-    { name: 'externalc', type: 'function', inputs: [], outputs: [{ name: '_externalc', type: 'address'}]},
+    { name: '_revert', type: 'function', inputs: [], outputs: []},
 
     { name: 'testAddress', type: 'function', inputs: [{ name: 'addr', type: 'address'}], outputs: [{ name: 'addr', type: 'address'}]},
 ]
@@ -374,7 +374,7 @@ it('test c8 selfDestruct', async function () {
     expect(ewasmjsvm.getPersistence().get(runtime.address).runtimeCode).toBeUndefined();
 });
 
-it('test c9 calls', async function () {
+it.skip('test c9 calls', async function () {
     const runtime = await ewasmjsvm.deploy(contracts.c9.bin, c9Abi)(DEFAULT_TX_INFO);
     deployments.c9 = runtime;
 
@@ -436,13 +436,13 @@ it('test c10 - calls solidity', async function () {
 });
 
 it.skip('test c10 revert', async function () {
-    const runtime = await ewasmjsvm.deploy(contracts.c10.bin, c10Abi)(DEFAULT_TX_INFO);
-    let value = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
+    const runtime = await ewasmjsvm.deploy(contracts.c10.bin, c10Abi)({...DEFAULT_TX_INFO});
+    let value = (await runtime.value({...DEFAULT_TX_INFO}))[0].toNumber();
     let balance = ewasmjsvm.getPersistence().get(runtime.address).balance.toNumber();
 
-    await deployments.c10.addvalue(5, {...DEFAULT_TX_INFO, value: 40});
+    await expect(runtime._revert({...DEFAULT_TX_INFO, value: 40})).rejects.toThrow();
 
-    const val = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
+    const val = (await runtime.value({...DEFAULT_TX_INFO}))[0].toNumber();
     expect(val).toBe(value);
 
     const newbalance = ewasmjsvm.getPersistence().get(runtime.address).balance.toNumber();

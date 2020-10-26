@@ -63,7 +63,7 @@ async function initializeWrap (wasmbin, wabi=[], address, atRuntime = false) {
         return;
     });
 
-    const storeStateChanges = (context, logs) => {
+    function storeStateChanges (context, logs) {
         Logger.get('ewasmvm').get('storeStateChanges').debug(Object.keys(context), logs.length);
         Logger.get('ewasmvm').get('context').debug('storeStateChanges', context);
         Logger.get('ewasmvm').get('logs').debug('storeStateChanges', logs);
@@ -76,6 +76,7 @@ async function initializeWrap (wasmbin, wabi=[], address, atRuntime = false) {
         // same for revert; the promise should not vanish.
         if (!currentPromise) return; //  throw new Error('No queued promise found.');
         if (currentPromise.name === 'constructor') {
+            Logger.get('ewasmvm').get('finishAction_constructor').debug(currentPromise.name, answ);
             currentPromise.cache.context[address].runtimeCode = answ;
             storeStateChanges(currentPromise.cache.context, currentPromise.cache.logs);
             currentPromise.resolve(address);
@@ -135,7 +136,11 @@ async function initializeWrap (wasmbin, wabi=[], address, atRuntime = false) {
         cache.context[txInfo.to].empty = false;
 
         const getMemory = () => minstance.exports.memory
-        const getCache = () => currentPromise.cache;
+        const getCache = () => {
+            // TODO somehow this gets called after finishAction
+            // need to see where
+            return currentPromise.cache;
+        }
 
         let internalCallTxObj = {};
         const internalCallWrap = (index, dataObj, context, logs) => {
@@ -161,7 +166,6 @@ async function initializeWrap (wasmbin, wabi=[], address, atRuntime = false) {
             } catch (e) {
                 result.success = 0;
             }
-
             currentPromise.cache.data[index].result = result;
             internalCallTxObj = {};
 
@@ -599,6 +603,7 @@ const initializeEthImports = (
             },
             revert: function (dataOffset_i32ptr_bytes, dataLength_i32) {
                 const res = jsvm_env.revert(dataOffset_i32ptr_bytes, dataLength_i32);
+                console.log('revert');
                 logger.debug('revert', [dataOffset_i32ptr_bytes, dataLength_i32], [res], getCache(), getMemory());
                 revertAction(res);
             },
