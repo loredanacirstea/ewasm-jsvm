@@ -1,9 +1,5 @@
 const { ERROR } = require('./constants');
-const Logger = require('./config');
 const {
-    persistence: initPersistence,
-    blocks: initBlocks,
-    logs: initLogs,
     cloneContext,
     cloneLogs,
     cloneStorage,
@@ -18,8 +14,7 @@ const {
     toBN,
 }  = require('./utils.js');
 
-function jsvm() {
-
+function jsvm(initPersistence, initBlocks, initLogs, Logger) {
     const persistence = initPersistence();
     const blocks = initBlocks();
     const chainlogs = initLogs();
@@ -575,12 +570,13 @@ function jsvm() {
         return vmapi;
     }
 
-    return {
-        persistence,
+    const wrappersist = {
+        accounts: persistence,
         blocks,
         logs: chainlogs,
-        call,
     }
+
+    return { persistence: wrappersist, call }
 
 }
 

@@ -1,11 +1,12 @@
 const fs = require('fs');
 const { exec } = require('child_process');
 const { ethers } = require('ethers');
-const { ewasmjsvm } = require('../src/index.js');
+const { ewasmjsvm: _ewasmjsvm } = require('../src/index.js');
 const utils = require('../src/utils.js');
 const { uint8ArrayToHex } = require('../src/utils.js');
-const Logger = require('../src/config');
+const {Logger} = require('../src/config');
 
+const ewasmjsvm = _ewasmjsvm();
 const checksum = ethers.utils.getAddress;
 const {toBN} = utils;
 

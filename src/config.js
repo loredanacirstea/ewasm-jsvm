@@ -96,4 +96,4 @@ Logger.get('jsvm').spawn('tx', null, txhandler);
 Logger.get('ewasmvm').spawn('tx', null, txhandler);
 Logger.get('ewasmvm').spawn('context', null, contexthandler);
 
-module.exports = Logger;
+module.exports = {Logger, logg};
