@@ -10,6 +10,8 @@ const {
     newi64,
     randomAddress,
     extractAddress,
+    BN2uint8arr,
+    toBN,
 }  = require('./utils.js');
 const {
     cloneContext,
@@ -24,8 +26,7 @@ function instance ({
 }) {
     // persistence = {accounts, logs, blocks}
     // Internal logger
-    const logger = Logger.get(vmname)
-    const ilogger = logger.spawn('internal');
+    const ilogger = Logger.get(vmname);
 
     const deploy = (bytecode, wabi) => async (...args) => {
         ilogger.debug('deploy', ...args);
@@ -52,20 +53,26 @@ function instance ({
 
     async function initializeWrap (bytecode, wabi=[], address, atRuntime = false) {
         bytecode = typeof bytecode === 'string' ? hexToUint8Array(bytecode) : bytecode;
-        const opcodelogs = [];  // {logs: [], internal: {indexopcode: logs:[]}}
 
         ilogger.get('initializeWrap').debug(address);
 
         const getfname = (fabi) => !atRuntime ? 'constructor' : (fabi ? fabi.name : 'main');
-        const _finishAction = finishAction(ilogger, vmcore.persistence, address, wabi);
-        const _revertAction = revertAction(ilogger);
-        const _ologger = ologger(log => {
-            opcodelogs.push(log);
-        }, address);
+
+        let wrappedInstance = {
+            address,
+            logs: [],
+            abi: wabi,
+            bin: bytecode,
+        }
+        const opcodelogs = (logs) => {
+            wrappedInstance.logs = logs;
+        }
+
+        const _finishAction = finishAction(ilogger, vmcore.persistence, address, wabi, opcodelogs);
+        const _revertAction = revertAction(ilogger, opcodelogs);
         const _startExecution = startExecution({
             vmcore,
             ilogger,
-            ologger: _ologger,
             initializeImports,
             instantiateModule,
             finishAction: _finishAction,
@@ -74,14 +81,8 @@ function instance ({
         const _wrappedMainRaw = wrappedMainRaw({ilogger, persistence: vmcore.persistence, _startExecution, address, bytecode, getfname});
         const _wrappedMain = wrappedMain(_wrappedMainRaw, getfname, wabi, bytecode);
 
-        const wrappedInstance = {
-            main: _wrappedMain(),
-            mainRaw: _wrappedMainRaw(),
-            address,
-            abi: wabi,
-            bin: bytecode,
-            logs: opcodelogs,
-        }
+        wrappedInstance.main = _wrappedMain();
+        wrappedInstance.mainRaw = _wrappedMainRaw();
 
         wabi.forEach(method => {
             if (method.name === 'constructor') return;
@@ -98,8 +99,11 @@ function instance ({
 
     const _storeStateChanges = storeStateChanges(ilogger, vmcore.persistence);
 
-    const finishAction = (ilogger, persistence, address, wabi) => currentPromise => answ => {
-        if (!currentPromise)  throw new Error('No queued promise found.');
+    const finishAction = (ilogger, persistence, address, wabi, opcodelogs) => currentPromise => answ => {
+        if (!currentPromise) {
+            console.log('No queued promise found.'); // throw new Error('No queued promise found.');
+            return;
+        }
         let result;
         if (currentPromise.name === 'constructor') {
             ilogger.get('finishAction_constructor').debug(currentPromise.name, answ);
@@ -110,17 +114,27 @@ function instance ({
             ilogger.get('finishAction').debug(currentPromise.name, answ);
             result = answ && abi && abi.outputs ? decode(abi.outputs, answ) : answ;
         }
+
         _storeStateChanges({accounts: currentPromise.cache.context, logs: currentPromise.cache.logs});
+        opcodelogs(currentPromise.opcodelogs)
+        currentPromise.resolved = true;
         currentPromise.resolve(result);
-        currentPromise = null;
+
+        // Needed for ewasm to stop execution
+        return '*stop*';
     }
 
-    const revertAction = (ilogger) => currentPromise => answ => {
-        if (!currentPromise) throw new Error('No queued promise found.');
+    const revertAction = (ilogger, opcodelogs) => currentPromise => answ => {
+        if (!currentPromise) {
+            console.log('No queued promise found.'); // throw new Error('No queued promise found.');
+            return;
+        }
         const error = new Error('Revert: ' + uint8ArrayToHex(answ));
         ilogger.get('revertAction').debug(currentPromise.name, answ);
+        opcodelogs(currentPromise.opcodelogs)
         currentPromise.reject(error);
         currentPromise = null;
+        return '*stop*';
     }
 
     const buildCache = (existingCache) => {
@@ -163,7 +177,7 @@ function instance ({
             resolve, reject,
             name: getfname(fabi),
             txInfo,
-            gas: {limit: txInfo.gasLimit, price: txInfo.gasPrice, used: newi64(0)},
+            gas: {limit: toBN(txInfo.gasLimit), price: toBN(txInfo.gasPrice), used: toBN(0)},
             data: typeof txInfo.data === 'string' ? hexToUint8Array(txInfo.data) : txInfo.data,
             cache
         };
@@ -173,6 +187,14 @@ function instance ({
             currentPromise.cache.context[txInfo.to] = persistence.accounts.get(txInfo.to);
             currentPromise.cache.context[txInfo.to].empty = false;
         }
+
+        currentPromise.opcodelogs = [];
+        currentPromise.ologger = ologger(log => {
+            currentPromise.opcodelogs.push(log);
+        }, address);
+        currentPromise.ologger.clear = () => currentPromise.opcodelogs = [];
+        currentPromise.ologger.get = () => currentPromise.opcodelogs;
+
         const __startExecution = () => _startExecution({
             currentPromise,
             bytecode,
@@ -216,6 +238,7 @@ function instance ({
 
             // restart execution from scratch with updated cache
             // TODO: get gas left and forward it
+            currentPromise.ologger.clear();
             __startExecution();
         }
 
@@ -232,6 +255,7 @@ function instance ({
             currentPromise.interruptResourceObj = {};
 
             // restart execution from scratch with updated cache
+            currentPromise.ologger.clear();
             __startExecution();
         }
 
@@ -259,7 +283,6 @@ function instance ({
     const startExecution = ({
         vmcore,
         ilogger,
-        ologger,
         initializeImports,
         instantiateModule,
         finishAction,
@@ -277,7 +300,19 @@ function instance ({
         ilogger.get('tx').debug('startExecution', currentPromise.txInfo);
         ilogger.debug('startExecution', Object.keys(currentPromise.cache.context));
 
-        const getMemory = () => currentPromise.minstance.exports.memory
+        let memoryMap;
+        const _getMemory = () => {
+            if (!memoryMap) memoryMap = new WebAssembly.Memory({ initial: 2 }); // Size is in pages.
+            return memoryMap;
+        }
+
+
+        const getMemory = () => {
+            if (currentPromise.minstance) return currentPromise.minstance.exports.memory;
+            return _getMemory();
+        }
+
+        const ologger = currentPromise.ologger;
 
         const importObj = initializeImports(
             vmcore,
@@ -290,8 +325,7 @@ function instance ({
             revertAction(currentPromise),
             ologger,
         );
-
-        instantiateModule(bytecode, importObj).then(wmodule => {
+        instantiateModule(bytecode, importObj).then(async wmodule => {
             currentPromise.minstance = wmodule.instance;
             ologger.debug('--', [], [], getCache(), getMemory());
             try {
@@ -351,13 +385,15 @@ const storeStateChanges = (ilogger, persistence) => (context) => {
 }
 
 const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...args) => {
-    const [name, input, output, cache, memory] = args;
+    const [name, input, output, cache, memory, stack] = args;
     const {context, logs, data} = cache;
     const clonedContext = cloneContext(context);
     const clonedLogs =  cloneLogs(logs);
     const currentContext = clonedContext[address] || {};
     clonedMemory = hexToUint8Array(uint8ArrayToHex(new Uint8Array(memory.buffer)));
-    const log = {name, input, output, memory: clonedMemory, logs: clonedLogs, context: clonedContext, contract: currentContext};
+    const clonedStack = stack ? stack.map(BN2uint8arr) : [];
+
+    const log = {name, input, output, memory: clonedMemory, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack};
     callback(log);
     // we return nothing, because we don't print anything;
     return;

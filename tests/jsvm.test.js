@@ -1,12 +1,14 @@
 const fs = require('fs');
 const { exec } = require('child_process');
 const { ethers } = require('ethers');
-const { ewasmjsvm: _ewasmjsvm } = require('../src/index.js');
+const { ewasmjsvm: _ewasmjsvm, evmjs: _evmjs } = require('../src/index.js');
 const utils = require('../src/utils.js');
 const { uint8ArrayToHex } = require('../src/utils.js');
 const {Logger} = require('../src/config');
+const evm = require('../src/evm.js');
 
 const ewasmjsvm = _ewasmjsvm();
+const evmjs = _evmjs();
 const checksum = ethers.utils.getAddress;
 const {toBN} = utils;
 
@@ -15,6 +17,7 @@ const SOL_PATH = './tests/sol';
 const B_PATH = './tests/build';
 const solToYul = name => `solc --ir -o ${C_PATH} ${SOL_PATH}/${name}.sol --overwrite`;
 const yulToEwasm = name => `solc --strict-assembly --optimize --yul-dialect evm --machine ewasm ${C_PATH}/${name}.yul`;
+const yulToEvm = name => `solc --strict-assembly --optimize --yul-dialect evm --machine evm ${C_PATH}/${name}.yul`;
 // const yulToEwasm = name => `solc --strict-assembly --yul-dialect evm --machine ewasm ${C_PATH}/${name}.yul`;
 const watToWasm = name => `wat2wasm build_wat/${name}.wat -o build_wasm/${name}.wasm`;
 

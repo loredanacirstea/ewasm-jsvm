@@ -55,13 +55,12 @@ const initializeImports = (
                 // outputLength_i32,
             ) {
                 const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
-
-                // return newi32(0);
+                const value = jsvm_env.loadMemory(valueOffset_i32ptr_u128, 32);
 
                 const result = jsvm_env.call(
                     gas_limit_i64,
                     address,
-                    valueOffset_i32ptr_u128,
+                    value,
                     dataOffset_i32ptr_bytes,
                     dataLength_i32,
                     // outputOffset_i32ptr_bytes,
@@ -81,6 +80,11 @@ const initializeImports = (
                 logger.debug('getCallDataSize', [], [result], getCache(), getMemory());
                 return result;
             },
+            callDataLoad: function(dataOffset) {
+                const result = jsvm_env.callDataLoad(dataOffset);
+                logger.debug('callDataLoad', [dataOffset], [result], getCache(), getMemory());
+                return result;
+            },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
             callCode: function (
                 gas_limit_i64,
@@ -90,10 +94,11 @@ const initializeImports = (
                 dataLength_i32,
             ) {
                 const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
+                const value = jsvm_env.loadMemory(valueOffset_i32ptr_u128, 32);
                 const result = jsvm_env.callCode(
                     gas_limit_i64,
                     address,
-                    valueOffset_i32ptr_u128,
+                    value,
                     dataOffset_i32ptr_bytes,
                     dataLength_i32,
                     // outputOffset_i32ptr_bytes,
@@ -235,7 +240,7 @@ const initializeImports = (
             getExternalCodeSize: function (addressOffset_i32ptr_address) {
                 const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
                 const result = jsvm_env.getExternalCodeSize(address);
-                logger.debug('getBlockDifficulty', [addressOffset_i32ptr_address], [result], getCache(), getMemory());
+                logger.debug('getExternalCodeSize', [addressOffset_i32ptr_address], [result], getCache(), getMemory());
                 return result;
             },
             // result gasLeft i64

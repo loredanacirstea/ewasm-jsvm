@@ -92,8 +92,11 @@ const contexthandler = (msg, txobj) => {
 const Logger = logg('', LEVELS.SILENT, null, [], []);
 Logger.spawn('jsvm');
 Logger.spawn('ewasmvm');
+Logger.spawn('evmjs');
 Logger.get('jsvm').spawn('tx', null, txhandler);
 Logger.get('ewasmvm').spawn('tx', null, txhandler);
 Logger.get('ewasmvm').spawn('context', null, contexthandler);
+Logger.get('evmjs').spawn('tx', null, txhandler);
+Logger.get('evmjs').spawn('context', null, contexthandler);
 
 module.exports = {Logger, logg};

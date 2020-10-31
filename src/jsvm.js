@@ -8,8 +8,6 @@ const {
 const {
     uint8ArrayToHex,
     hexToUint8Array,
-    newi32,
-    newi64,
     extractAddress,
     toBN,
 }  = require('./utils.js');
@@ -63,13 +61,13 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         let lastReturnData;
 
         let gas = {
-            limit: newi64(txObj.gasLimit || 4000000),
-            price: txObj.gasPrice || 1,
-            used: newi64(0),
+            limit: toBN(txObj.gasLimit || 4000000),
+            price: txObj.gasPrice || toBN(1),
+            used: toBN(0),
         }
         const getGas = () => gas;
         const useGas = gas => {
-            gas.used += gas;
+            gas.used = gas.used.add(gas);
         }
         txInfo.gas = gas;
 
@@ -151,17 +149,17 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             // 33 methods
                 storeMemory: function (bytes, offset) {
                     Logger.get('jsvm').get('memory').debug('store', bytes, offset);
-                    storeMemory(bytes, offset, 32);
+                    storeMemory(bytes, offset.toNumber(), 32);
                 },
                 storeMemory8: function (bytes, offset) {
-                    storeMemory(bytes, offset, 1);
+                    storeMemory(bytes, offset.toNumber(), 1);
                 },
                 loadMemory: function (offset) {
                     Logger.get('jsvm').get('memory').debug('load', offset);
-                    return loadMemory(offset, 32);
+                    return loadMemory(offset.toNumber(), 32);
                 },
-                useGas: function (amount_i64) {
-                    useGas(amount_i64);
+                useGas: function (amount) {
+                    useGas(amount);
                 },
                 getAddress: function () {
                     const size = 32;
@@ -186,36 +184,43 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     return balance;
                 },
                 getBlockHash: function (number) {
+                    // TODO proper blockchash
                     return hexToUint8Array(block.hash);
                 },
-                callDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
+                callDataCopy: function (resultOffset, dataOffset, length) {
+                    resultOffset = resultOffset.toNumber();
+                    dataOffset = dataOffset.toNumber();
                     storeMemory(
-                        txObj.data.slice(dataOffset_i32, dataOffset_i32 + length_i32),
-                        resultOffset_i32ptr_bytes,
-                        length_i32,
+                        txObj.data.slice(dataOffset, dataOffset + length),
+                        resultOffset,
+                        length,
                     );
                 },
                 // returns i32
                 getCallDataSize: function () {
-                    return newi32(txObj.data.length);
+                    return toBN(txObj.data.length);
                 },
                 callDataLoad: function(dataOffset) {
+                    dataOffset = dataOffset.toNumber();
                     return txObj.data.slice(dataOffset, dataOffset + 32);
                 },
                 // result i32 Returns 0 on success, 1 on failure and 2 on revert
                 call: function (
                     gas_limit_i64,
-                    address, // the memory offset to load the address from (address)
-                    valueOffset_i32ptr_u128,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
-                    outputOffset_i32ptr_bytes,
-                    outputLength_i32,
+                    address,
+                    value,
+                    dataOffset,
+                    dataLength,
+                    outputOffset,
+                    outputLength,
                 ) {
-                    Logger.get('jsvm').get('call').debug(address, dataOffset_i32ptr_bytes, dataLength_i32);
+                    dataOffset = dataOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+                    outputOffset = outputOffset.toNumber();
+                    outputLength = outputLength.toNumber();
+                    Logger.get('jsvm').get('call').debug(address, value,dataOffset, dataLength);
 
-                    const value = loadMemory(valueOffset_i32ptr_u128, 32);
-                    const data = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                    const data = loadMemory(dataOffset, dataLength);
 
                     const cache = getCache();
                     const currentData = {
@@ -247,27 +252,33 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                         value,
                     );
 
-                    if (outputOffset_i32ptr_bytes && outputLength_i32) {
-                        storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+                    if (outputOffset && outputLength) {
+                        storeMemory(cachedResult.result.data, outputOffset, outputLength);
                     }
                     setReturnData(cachedResult.result.data);
 
-                    return newi32(cachedResult.result.success);
+                    return toBN(cachedResult.result.success);
                 },
                 // result i32 Returns 0 on success, 1 on failure and 2 on revert
                 // uses the code from address
                 // context from current contract
                 callCode: function (
                     gas_limit_i64,
-                    addressOffset_i32ptr_address, // the memory offset to load the address from (address)
-                    valueOffset_i32ptr_u128,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
+                    address,
+                    value,
+                    dataOffset,
+                    dataLength,
+                    outputOffset,
+                    outputLength,
                 ) {
-                    Logger.get('jsvm').get('callCode').debug(gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32);
+                    dataOffset = dataOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+                    outputOffset = outputOffset.toNumber();
+                    outputLength = outputLength.toNumber();
 
-                    const value = loadMemory(valueOffset_i32ptr_u128, 32);
-                    const data = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                    Logger.get('jsvm').get('callCode').debug(gas_limit_i64, address, value, dataOffset, dataLength);
+
+                    const data = loadMemory(dataOffset, dataLength);
                     const hexaddress = extractAddress(address);
                     const contract = persistence.get(hexaddress);
 
@@ -306,25 +317,32 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                         value,
                     );
 
-                    if (outputOffset_i32ptr_bytes && outputLength_i32) {
-                        storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+                    if (outputOffset && outputLength) {
+                        storeMemory(cachedResult.result.data, outputOffset, outputLength);
                     }
                     setReturnData(cachedResult.result.data);
 
-                    return newi32(cachedResult.result.success);
+                    return toBN(cachedResult.result.success);
                 },
                 // result i32 Returns 0 on success, 1 on failure and 2 on revert
                 callDelegate: function (
                     gas_limit_i64,
-                    addressOffset_i32ptr_address,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
+                    address,
+                    dataOffset,
+                    dataLength,
+                    outputOffset,
+                    outputLength,
                 ) {
+                    dataOffset = dataOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+                    outputOffset = outputOffset.toNumber();
+                    outputLength = outputLength.toNumber();
+
                     // identical to a message call except the code at the target address is executed in the context of the calling contract
                     // msg.sender and msg.value do not change their values.
-                    Logger.get('jsvm').get('callCode').debug(gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32);
+                    Logger.get('jsvm').get('callCode').debug(gas_limit_i64, address, valueOffset_i32ptr_u128, dataOffset, dataLength);
 
-                    const data = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                    const data = loadMemory(dataOffset, dataLength);
                     const hexaddress = extractAddress(address);
                     const contract = persistence.get(hexaddress);
 
@@ -357,25 +375,30 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
 
                     currentCacheIndex += 1;
 
-                    if (outputOffset_i32ptr_bytes && outputLength_i32) {
-                        storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+                    if (outputOffset && outputLength) {
+                        storeMemory(cachedResult.result.data, outputOffset, outputLength);
                     }
                     setReturnData(cachedResult.result.data);
 
-                    return newi32(cachedResult.result.success);
+                    return toBN(cachedResult.result.success);
                 },
                 // result i32 Returns 0 on success, 1 on failure and 2 on revert
                 callStatic: function (
                     gas_limit_i64,
                     address,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
-                    outputOffset_i32ptr_bytes,
-                    outputLength_i32,
+                    dataOffset,
+                    dataLength,
+                    outputOffset,
+                    outputLength,
                 ) {
-                    Logger.get('jsvm').get('callStatic').debug(address, dataOffset_i32ptr_bytes, dataLength_i32);
+                    dataOffset = dataOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+                    outputOffset = outputOffset.toNumber();
+                    outputLength = outputLength.toNumber();
 
-                    const data = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                    Logger.get('jsvm').get('callStatic').debug(address, dataOffset, dataLength);
+
+                    const data = loadMemory(dataOffset, dataLength);
 
                     const cache = getCache();
                     const currentData = {
@@ -401,12 +424,12 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
 
                     currentCacheIndex += 1;
 
-                    if (outputOffset_i32ptr_bytes && outputLength_i32) {
-                        storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+                    if (outputOffset && outputLength) {
+                        storeMemory(cachedResult.result.data, outputOffset, outputLength);
                     }
                     setReturnData(cachedResult.result.data);
 
-                    return newi32(cachedResult.result.success);
+                    return toBN(cachedResult.result.success);
                 },
                 storageStore: function (key_uint8array, value_uint8array) {
                     storageStore(key_uint8array, value_uint8array);
@@ -427,13 +450,17 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     value.set(tightValue, size - tightValue.length);
                     return value;
                 },
-                codeCopy: function (resultOffset_i32ptr_bytes, codeOffset_i32, length_i32) {
-                    const runtime = getInstance().runtimeCode.slice(codeOffset_i32, codeOffset_i32 + length_i32)
-                    storeMemory(runtime, resultOffset_i32ptr_bytes, length_i32)
+                codeCopy: function (resultOffset, codeOffset, length) {
+                    resultOffset = resultOffset.toNumber();
+                    codeOffset = codeOffset.toNumber();
+                    length = length.toNumber();
+
+                    const runtime = getInstance().runtimeCode.slice(codeOffset, codeOffset + length)
+                    storeMemory(runtime, resultOffset, length)
                 },
                 // returns i32 - code size current env
                 getCodeSize: function() {
-                    return newi32(getInstance().runtimeCode.length);
+                    return toBN(getInstance().runtimeCode.length);
                 },
                 // block’s beneficiary address
                 getBlockCoinbase: function() {
@@ -449,6 +476,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     dataOffset,
                     dataLength,
                 ) {
+                    dataOffset = dataOffset.toNumber();
+
                     const runtimeCode = loadMemory(dataOffset, dataLength);
                     const address = persistence.set({ runtimeCode, balance: toBN(balance) });
                     Logger.get('jsvm').get('create').debug(address);
@@ -460,7 +489,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     return addrBytes;
                 },
                 // returns u256
-                getBlockDifficulty: function (resulltOffset_i32ptr_u256) {
+                getBlockDifficulty: function () {
                     const size = 32;
                     const value = new Uint8Array(size);
                     const tightValue = hexToUint8Array(block.difficulty.toString(16));
@@ -469,29 +498,35 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 },
                 externalCodeCopy: function (
                     address, // the memory offset to load the address from (address)
-                    resultOffset_i32ptr_bytes,
-                    codeOffset_i32,
-                    dataLength_i32,
+                    resultOffset,
+                    codeOffset,
+                    dataLength,
                 ) {
+                    console.log('externalCodeCopy222', address, resultOffset, codeOffset, dataLength)
                     address = extractAddress(address);
+                    resultOffset = resultOffset.toNumber();
+                    codeOffset = codeOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+
                     Logger.get('jsvm').get('externalCodeCopy').debug(address);
-                    const codeSlice = persistence.get(address).runtimeCode.slice(codeOffset_i32, codeOffset_i32 + dataLength_i32);
-                    storeMemory(codeSlice, resultOffset_i32ptr_bytes, dataLength_i32);
+                    const codeSlice = persistence.get(address).runtimeCode.slice(codeOffset, codeOffset + dataLength);
+                    storeMemory(codeSlice, resultOffset, dataLength);
+                },
+                getExternalCodeHash: function(address) {
+                    throw new Error('Not implemented');
                 },
                 // Returns extCodeSize i32
                 getExternalCodeSize: function (address) {
                     address = extractAddress(address);
                     Logger.get('jsvm').get('getExternalCodeSize').debug(address);
-                    return newi32(persistence.get(address).runtimeCode.length);
+                    return toBN(persistence.get(address).runtimeCode.length);
                 },
-                // result gasLeft i64
                 getGasLeft: function () {
                     const gas = getGas();
-                    return newi64(gas.limit - gas.used);
+                    return gas.limit.sub(gas.used);
                 },
-                // result blockGasLimit i64
                 getBlockGasLimit: function () {
-                    return newi64(block.gasLimit);
+                    return block.gasLimit;
                 },
                 getTxGasPrice: function () {
                     const size = 32;
@@ -501,22 +536,22 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     return value;
                 },
                 log: function (
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
-                    numberOfTopics_i32,
+                    dataOffset,
+                    dataLength,
+                    numberOfTopics,
                     topics,
                 ) {
                     Logger.get('jsvm').get('log').debug(topics);
                     chainlogs.set({
                         address: vmapi.getAddress(),
                         blockNumber: block.number,
-                        data: loadMemory(dataOffset_i32ptr_bytes, dataLength_i32),
-                        topics: topics.slice(0, numberOfTopics_i32),
+                        data: loadMemory(dataOffset.toNumber(), dataLength.toNumber()),
+                        topics: topics.slice(0, numberOfTopics),
                     })
                 },
                 // result blockNumber i64
                 getBlockNumber: function () {
-                    return newi64(block.number);
+                    return toBN(block.number);
                 },
                 getTxOrigin: function () {
                     const size = 32;
@@ -524,21 +559,25 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     address.set(hexToUint8Array(txObj.origin), size - 20);
                     return address;
                 },
-                finish: function (dataOffset_i32ptr_bytes, dataLength_i32) {
-                    return loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                finish: function (dataOffset, dataLength) {
+                    return loadMemory(dataOffset.toNumber(), dataLength.toNumber());
                 },
-                revert: function (dataOffset_i32ptr_bytes, dataLength_i32) {
-                    return loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                revert: function (dataOffset, dataLength) {
+                    return loadMemory(dataOffset.toNumber(), dataLength.toNumber());
                 },
                 // result dataSize i32
                 getReturnDataSize: function () {
-                    return newi32(getReturnData().length);
+                    return toBN(getReturnData().length);
                 },
-                returnDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
+                returnDataCopy: function (resultOffset, dataOffset, length) {
+                    resultOffset = resultOffset.toNumber();
+                    dataOffset = dataOffset.toNumber();
+                    length = length.toNumber();
+
                     storeMemory(
-                        getReturnData().slice(dataOffset_i32, dataOffset_i32 + length_i32),
-                        resultOffset_i32ptr_bytes,
-                        length_i32,
+                        getReturnData().slice(dataOffset, dataOffset + length),
+                        resultOffset,
+                        length,
                     );
                 },
                 selfDestruct: function (address) {
@@ -554,10 +593,10 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 },
                 // result blockTimestamp i64,
                 getBlockTimestamp: function () {
-                    return newi64(block.timestamp);
+                    return toBN(block.timestamp);
                 },
                 getBlockChainId: function () {
-                    return newi32(99);
+                    return toBN(99);
                 },
                 getMSize: function () {
                     return (new Uint8Array(getMemory().buffer)).length;

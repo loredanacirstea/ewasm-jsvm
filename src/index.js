@@ -7,7 +7,7 @@ const {
 
 const _vmcore = require('./jsvm.js');
 const _ewasmjsvm = require('./ewasm.js');
-// const _evm = require('./evm.js');
+const _evm = require('./evm.js');
 const _instance = require('./instance');
 const utils = require('./utils.js');
 
@@ -18,16 +18,16 @@ const ewasmjsvm = () => _instance({
     initializeImports: _ewasmjsvm.initializeImports,
     instantiateModule: _ewasmjsvm.instantiateModule,
 });
-// const evmjs = () => _instance({
-//     vmname: 'evmjs',
-//     vmcore: vmcore(),
-//     initializeImports: _evm.initializeImports,
-//     instantiateModule: _evm.instantiateModule,
-// });
+const evmjs = () => _instance({
+    vmname: 'evmjs',
+    vmcore: vmcore(),
+    initializeImports: _evm.initializeImports,
+    instantiateModule: _evm.instantiateModule,
+});
 
 module.exports = {
     vmcore,
     ewasmjsvm,
-    // evmjs,
+    evmjs,
     utils,
 }
