@@ -69,7 +69,7 @@ function instance ({
         }
 
         const _finishAction = finishAction(ilogger, vmcore.persistence, address, wabi, opcodelogs);
-        const _revertAction = revertAction(ilogger, opcodelogs);
+        const _revertAction = revertAction(ilogger, vmcore.persistence, address, opcodelogs);
         const _startExecution = startExecution({
             vmcore,
             ilogger,
@@ -104,9 +104,12 @@ function instance ({
             console.log('No queued promise found.'); // throw new Error('No queued promise found.');
             return;
         }
+        if (currentPromise.resolved) {
+            throw new Error('Promise already resolved');
+        }
         let result;
         if (currentPromise.name === 'constructor') {
-            ilogger.get('finishAction_constructor').debug(currentPromise.name, answ);
+            // ilogger.get('finishAction_constructor').debug(currentPromise.name, answ);
             currentPromise.cache.context[address].runtimeCode = answ;
             result = address;
         } else {
@@ -117,24 +120,27 @@ function instance ({
 
         _storeStateChanges({accounts: currentPromise.cache.context, logs: currentPromise.cache.logs});
         opcodelogs(currentPromise.opcodelogs)
-        currentPromise.resolved = true;
         currentPromise.resolve(result);
+        currentPromise.resolved = true; // passed by reference
 
-        // Needed for ewasm to stop execution
-        return '*stop*';
+        // Needed for evm1 to stop execution
+        return ERROR.STOP;
     }
 
-    const revertAction = (ilogger, opcodelogs) => currentPromise => answ => {
+    const revertAction = (ilogger, persistence, address, opcodelogs) => currentPromise => answ => {
         if (!currentPromise) {
             console.log('No queued promise found.'); // throw new Error('No queued promise found.');
             return;
+        }
+        if (currentPromise.resolved) {
+            throw new Error('Promise already resolved');
         }
         const error = new Error('Revert: ' + uint8ArrayToHex(answ));
         ilogger.get('revertAction').debug(currentPromise.name, answ);
         opcodelogs(currentPromise.opcodelogs)
         currentPromise.reject(error);
-        currentPromise = null;
-        return '*stop*';
+        currentPromise.resolved = true;
+        return ERROR.STOP;
     }
 
     const buildCache = (existingCache) => {
@@ -162,8 +168,13 @@ function instance ({
         txInfo.to = txInfo.to || address;
 
         const cache = buildCache(existingCache);
-        cache.context[txInfo.from] = persistence.accounts.get(txInfo.from);
-        cache.context[txInfo.to] = persistence.accounts.get(txInfo.to);
+        // If we have previous cache, we keep it
+        if (!cache.context[txInfo.from]) {
+            cache.context[txInfo.from] = persistence.accounts.get(txInfo.from);
+        }
+        if (!cache.context[txInfo.to]) {
+            cache.context[txInfo.to] = persistence.accounts.get(txInfo.to);
+        }
         // constructor TODO: check if constructor
         if (!cache.context[txInfo.to].runtimeCode) {
             cache.context[txInfo.to].runtimeCode = txInfo.data;
@@ -218,6 +229,7 @@ function instance ({
             const newtx = {...currentPromise.txInfo, ...lowtx2hex(dataObj)}
             currentPromise.parent = true;
             currentPromise.interruptTxObj = { index, newtx, context, logs };
+            ilogger.debug('internalCallWrap');
         }
 
         const internalCallWrapContinue = async () => {
@@ -231,6 +243,7 @@ function instance ({
                 result.data = await wmodule.mainRaw(newtx, {context, logs});
                 result.success = 1;
             } catch (e) {
+                console.error(e);
                 result.success = 0;
             }
             currentPromise.cache.data[index].result = result;
@@ -244,6 +257,7 @@ function instance ({
 
         const asyncResourceWrap = (account) => {
             currentPromise.interruptResourceObj = {account};
+            ilogger.debug('asyncResourceWrap');
         }
 
         const asyncResourceWrapContinue = async() => {
@@ -296,7 +310,6 @@ function instance ({
         asyncResourceWrap,
         asyncResourceWrapContinue,
     }) => {
-
         ilogger.get('tx').debug('startExecution', currentPromise.txInfo);
         ilogger.debug('startExecution', Object.keys(currentPromise.cache.context));
 
@@ -342,6 +355,10 @@ function instance ({
                     case ERROR.ASYNC_RESOURCE:
                         asyncResourceWrapContinue();
                         break;
+                    case ERROR.STOP:
+                        // this is how we stop the wasm module execution
+                        // for return, revert, etc.
+                        return;
                     default:
                         throw e;
                 }

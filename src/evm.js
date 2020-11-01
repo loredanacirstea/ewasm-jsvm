@@ -1,10 +1,10 @@
 const BN = require('bn.js');
 const {
-    uint8ArrayToHex,
     hexToUint8Array,
     toBN,
     BN2uint8arr,
 }  = require('./utils.js');
+const {ERROR} = require('./constants');
 const evmasm = require('evmasm');
 
 const initializeImports = (
@@ -89,7 +89,7 @@ const initializeImports = (
         callDataCopy: function (resultOffset, dataOffset, length, stack) {
             const result = jsvm_env.callDataCopy(resultOffset, dataOffset, length);
             logger.debug('CALLDATACOPY', [resultOffset, dataOffset, length], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return;
         },
         // returns i32
         getCallDataSize: function (stack) {
@@ -97,9 +97,9 @@ const initializeImports = (
             logger.debug('CALLDATASIZE', [], [result], getCache(), getMemory(), stack);
             return result;
         },
-        callDataLoad: function(dataOffset) {
+        callDataLoad: function(dataOffset, stack) {
             const result = jsvm_env.callDataLoad(dataOffset);
-            logger.debug('CALLDATALOAD', [dataOffset], [result], getCache(), getMemory());
+            logger.debug('CALLDATALOAD', [dataOffset], [result], getCache(), getMemory(), stack);
             return toBN(result);
         },
         // result i32 Returns 0 on success, 1 on failure and 2 on revert
@@ -325,7 +325,7 @@ const initializeImports = (
         finish: function (dataOffset, dataLength, stack) {
             const res = jsvm_env.finish(dataOffset, dataLength);
             logger.debug('FINISH', [dataOffset, dataLength], [res], getCache(), getMemory(), stack);
-            finishAction(res);  // TODO tohex
+            finishAction(res);
         },
         revert: function (dataOffset, dataLength, stack) {
             const res = jsvm_env.revert(dataOffset, dataLength);
@@ -355,12 +355,12 @@ const initializeImports = (
             return toBN(result);
         },
         return: (offset, length, stack) => {
-            const result = uint8ArrayToHex(jsvm_env.finish(offset, length));
+            const result = jsvm_env.finish(offset, length);
             logger.debug('RETURN', [offset, length], [result], getCache(), getMemory(), stack);
             return finishAction(result);
         },
         revert: (offset, length, stack) => {
-            const result = uint8ArrayToHex(jsvm_env.revert(offset, length));
+            const result = jsvm_env.revert(offset, length);
             logger.debug('REVERT', [offset, length], [result], getCache(), getMemory(), stack);
             return revertAction(result);
         },
@@ -480,7 +480,7 @@ const initializeImports = (
         },
         not: (a, stack) => {
             const result = a.notn(256);
-            logger.debug('NOT', [a, b], [result], getCache(), getMemory(), stack);
+            logger.debug('NOT', [a], [result], getCache(), getMemory(), stack);
             return result;
         },
         byte: (nth, bb, stack) => {
@@ -527,9 +527,8 @@ const initializeImports = (
             if (no >= stack.length) throw new Error(`Invalid SWAP${no} ; stack: ${stack}`);
             const last = stack.pop();
             const spliced = stack.splice(stack.length - no, 1, last);
-            logger.debug('SWAP' + no, [], [], getCache(), getMemory(), stack);
             stack.push(spliced[0]);
-
+            logger.debug('SWAP' + no, [], [], getCache(), getMemory(), stack);
             return stack;
         },
         handleDup: (code, stack) => {
@@ -548,12 +547,12 @@ const initializeImports = (
             return newpos;
         },
         jumpi: (newpos, condition, stack) => {
-            logger.debug('JUMPI', [newpos, condition], [], getCache(), getMemory(), stack);
+            logger.debug('JUMPI', [condition, newpos], [], getCache(), getMemory(), stack);
             newpos = newpos.toNumber();
             if (condition.toNumber() === 1) return newpos;
         },
-        jumpdest:(tag, stack) => {
-            logger.debug('JUMPDEST', [tag], [], getCache(), getMemory(), stack);
+        jumpdest:(stack) => {
+            logger.debug('JUMPDEST', [], [], getCache(), getMemory(), stack);
         },
         pop: stack => {
             stack.pop();
@@ -611,7 +610,7 @@ const interpretOpcode = async ({bytecode, stack, importObj, position}) => {
 
         const result = await importObj[opcode.name](...args, stack);
 
-        if (result === '*stop*') return {bytecode, stack, position: 0};
+        if (result === ERROR.STOP) return {bytecode, stack, position: 0};
         if (result) stack.push(toBN(result));
 
         return {bytecode, stack, position};
@@ -680,7 +679,7 @@ const opcodes = {
     '46': {name: 'getBlockChainId', arity: 0},
     '47': {name: 'getSelfBalance', arity: 0},
 
-    '50': {name: 'pop', arity: 1},
+    '50': {name: 'pop', arity: 0},
     '51': {name: 'loadMemory', arity: 1},
     '52': {name: 'storeMemory', arity: 2},
     '53': {name: 'storeMemory8', arity: 2},

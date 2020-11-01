@@ -1,8 +1,11 @@
+const BN = require('bn.js');
 const {
     uint8ArrayToHex,
     newi32,
     instantiateWasm,
+    toBN,
 }  = require('./utils.js');
+const {ERROR} = require('./constants');
 
 const initializeImports = (
     vmcore,
@@ -16,30 +19,27 @@ const initializeImports = (
     logger,
 ) => {
     const jsvm_env = vmcore.call(txObj, internalCallWrap, asyncResourceWrap, getMemory, getCache);
-    return {
-        // i32ptr is u128
-        // 33 methods
-        ethereum: {
+    const ethereum = {
             useGas: function (amount_i64) {
-                jsvm_env.useGas(amount_i64);
+                jsvm_env.useGas(toBN(amount_i64));
                 logger.debug('useGas', [amount_i64], [], getCache(), getMemory());
             },
             getAddress: function (resultOffset_i32ptr) {
                 const address = jsvm_env.getAddress();
-                jsvm_env.storeMemory(address, resultOffset_i32ptr);
+                jsvm_env.storeMemory(address, toBN(resultOffset_i32ptr));
                 logger.debug('getAddress', [resultOffset_i32ptr], [address], getCache(), getMemory());
             },
             // result is u128
             getExternalBalance: function (addressOffset_i32ptr, resultOffset_i32ptr) {
-                const address = readAddress(jsvm_env, addressOffset_i32ptr);
+                const address = readAddress(jsvm_env, toBN(addressOffset_i32ptr));
                 const balance = jsvm_env.getExternalBalance(address);
-                jsvm_env.storeMemory(balance, resultOffset_i32ptr);
+                jsvm_env.storeMemory(balance, toBN(resultOffset_i32ptr));
                 logger.debug('getExternalBalance', [addressOffset_i32ptr, resultOffset_i32ptr], [balance], getCache(), getMemory());
             },
             // result i32 Returns 0 on success and 1 on failure
             getBlockHash: function (number_i64, resultOffset_i32ptr) {
-                const hash = jsvm_env.getBlockHash(number_i64);
-                jsvm_env.storeMemory(hash, resultOffset_i32ptr);
+                const hash = jsvm_env.getBlockHash(toBN(number_i64));
+                jsvm_env.storeMemory(hash, toBN(resultOffset_i32ptr));
                 const result = newi32(0);
                 logger.debug('getBlockHash', [number_i64, resultOffset_i32ptr], [result, hash], getCache(), getMemory());
                 return result;
@@ -54,15 +54,15 @@ const initializeImports = (
                 // outputOffset_i32ptr_bytes,
                 // outputLength_i32,
             ) {
-                const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
-                const value = jsvm_env.loadMemory(valueOffset_i32ptr_u128, 32);
+                const address = readAddress(jsvm_env, toBN(addressOffset_i32ptr_address));
+                const value = jsvm_env.loadMemory(toBN(valueOffset_i32ptr_u128), 32);
 
                 const result = jsvm_env.call(
-                    gas_limit_i64,
+                    toBN(gas_limit_i64),
                     address,
                     value,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
+                    toBN(dataOffset_i32ptr_bytes),
+                    toBN(dataLength_i32),
                     // outputOffset_i32ptr_bytes,
                     // outputLength_i32,
                 );
@@ -70,7 +70,7 @@ const initializeImports = (
                 return result;
             },
             callDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
-                const result = jsvm_env.callDataCopy(resultOffset_i32ptr_bytes, dataOffset_i32, length_i32);
+                const result = jsvm_env.callDataCopy(toBN(resultOffset_i32ptr_bytes), toBN(dataOffset_i32), toBN(length_i32));
                 logger.debug('callDataCopy', [resultOffset_i32ptr_bytes, dataOffset_i32, length_i32], [result], getCache(), getMemory());
                 return result;
             },
@@ -81,7 +81,7 @@ const initializeImports = (
                 return result;
             },
             callDataLoad: function(dataOffset) {
-                const result = jsvm_env.callDataLoad(dataOffset);
+                const result = jsvm_env.callDataLoad(toBN(dataOffset));
                 logger.debug('callDataLoad', [dataOffset], [result], getCache(), getMemory());
                 return result;
             },
@@ -93,14 +93,14 @@ const initializeImports = (
                 dataOffset_i32ptr_bytes,
                 dataLength_i32,
             ) {
-                const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
-                const value = jsvm_env.loadMemory(valueOffset_i32ptr_u128, 32);
+                const address = readAddress(jsvm_env, toBN(addressOffset_i32ptr_address));
+                const value = jsvm_env.loadMemory(toBN(valueOffset_i32ptr_u128), 32);
                 const result = jsvm_env.callCode(
                     gas_limit_i64,
                     address,
                     value,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
+                    toBN(dataOffset_i32ptr_bytes),
+                    toBN(dataLength_i32),
                     // outputOffset_i32ptr_bytes,
                     // outputLength_i32,
                 );
@@ -114,12 +114,12 @@ const initializeImports = (
                 dataOffset_i32ptr_bytes,
                 dataLength_i32,
             ) {
-                const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
+                const address = readAddress(jsvm_env, toBN(addressOffset_i32ptr_address));
                 const result = jsvm_env.callDelegate(
-                    gas_limit_i64,
+                    toBN(gas_limit_i64),
                     address,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
+                    toBN(dataOffset_i32ptr_bytes),
+                    toBN(dataLength_i32),
                     // outputOffset_i32ptr_bytes,
                     // outputLength_i32,
                 );
@@ -135,13 +135,13 @@ const initializeImports = (
                 // outputOffset_i32ptr_bytes,
                 // outputLength_i32,
             ) {
-                const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
+                const address = readAddress(jsvm_env, toBN(addressOffset_i32ptr_address));
 
                 const result = jsvm_env.callStatic(
-                    gas_limit_i64,
+                    toBN(gas_limit_i64),
                     address,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
+                    toBN(dataOffset_i32ptr_bytes),
+                    toBN(dataLength_i32),
                     // outputOffset_i32ptr_bytes,
                     // outputLength_i32,
                 );
@@ -150,32 +150,32 @@ const initializeImports = (
                 return result;
             },
             storageStore: function (pathOffset_i32ptr_bytes32, valueOffset_i32ptr_bytes32) {
-                const key = jsvm_env.loadMemory(pathOffset_i32ptr_bytes32);
-                const value = jsvm_env.loadMemory(valueOffset_i32ptr_bytes32);
+                const key = jsvm_env.loadMemory(toBN(pathOffset_i32ptr_bytes32));
+                const value = jsvm_env.loadMemory(toBN(valueOffset_i32ptr_bytes32));
                 jsvm_env.storageStore(key, value);
 
                 logger.debug('storageStore', [pathOffset_i32ptr_bytes32, valueOffset_i32ptr_bytes32], [key, value], getCache(), getMemory());
             },
             storageLoad: function (pathOffset_i32ptr_bytes32, resultOffset_i32ptr_bytes32) {
-                const key = jsvm_env.loadMemory(pathOffset_i32ptr_bytes32);
+                const key = jsvm_env.loadMemory(toBN(pathOffset_i32ptr_bytes32));
                 const value = jsvm_env.storageLoad(key);
-                jsvm_env.storeMemory(value, resultOffset_i32ptr_bytes32);
+                jsvm_env.storeMemory(value, toBN(resultOffset_i32ptr_bytes32));
 
                 logger.debug('storageLoad', [pathOffset_i32ptr_bytes32, resultOffset_i32ptr_bytes32], [value], getCache(), getMemory());
             },
             getCaller: function (resultOffset_i32ptr_address) {
                 const address = jsvm_env.getCaller();
-                jsvm_env.storeMemory(address, resultOffset_i32ptr_address);
+                jsvm_env.storeMemory(address, toBN(resultOffset_i32ptr_address));
                 logger.debug('getCaller', [resultOffset_i32ptr_address], [address], getCache(), getMemory());
             },
             getCallValue: function (resultOffset_i32ptr_u128) {
                 const value = jsvm_env.getCallValue();
-                jsvm_env.storeMemory(value, resultOffset_i32ptr_u128);
+                jsvm_env.storeMemory(value, toBN(resultOffset_i32ptr_u128));
                 logger.debug('getCallValue', [resultOffset_i32ptr_u128], [value], getCache(), getMemory());
             },
             codeCopy: function (resultOffset_i32ptr_bytes, codeOffset_i32, length_i32) {
-                jsvm_env.codeCopy(resultOffset_i32ptr_bytes, codeOffset_i32, length_i32);
-                logger.debug('codeCopy', [resultOffset_i32ptr_bytes, codeOffset_i32, length_i32], [], getCache(), getMemory());
+                const result = jsvm_env.codeCopy(toBN(resultOffset_i32ptr_bytes), toBN(codeOffset_i32), toBN(length_i32));
+                logger.debug('codeCopy', [resultOffset_i32ptr_bytes, codeOffset_i32, length_i32], [result], getCache(), getMemory());
             },
             // returns i32 - code size current env
             getCodeSize: function() {
@@ -186,7 +186,7 @@ const initializeImports = (
             // block’s beneficiary address
             getBlockCoinbase: function(resultOffset_i32ptr_address) {
                 const value = jsvm_env.getBlockCoinbase();
-                jsvm_env.storeMemory(value, resultOffset_i32ptr_address);
+                jsvm_env.storeMemory(value, toBN(resultOffset_i32ptr_address));
                 logger.debug('getBlockCoinbase', [resultOffset_i32ptr_address], [value], getCache(), getMemory());
             },
             // result i32 Returns 0 on success, 1 on failure and 2 on revert
@@ -196,11 +196,9 @@ const initializeImports = (
                 dataLength_i32,
                 resultOffset_i32ptr_bytes,
             ) {
-                const balance = parseInt(uint8ArrayToHex(
-                    jsvm_env.loadMemory(valueOffset_i32ptr_u128, 32)
-                ), 16);
-                const address = jsvm_env.create(balance, dataOffset_i32ptr_bytes, dataLength_i32);
-                jsvm_env.storeMemory(address, resultOffset_i32ptr_bytes);
+                const balance = jsvm_env.loadMemory(toBN(valueOffset_i32ptr_u128), 32);
+                const address = jsvm_env.create(balance, toBN(dataOffset_i32ptr_bytes), toBN(dataLength_i32));
+                jsvm_env.storeMemory(address, toBN(resultOffset_i32ptr_bytes));
 
                 logger.debug('create', [valueOffset_i32ptr_u128,
                     dataOffset_i32ptr_bytes,
@@ -213,7 +211,7 @@ const initializeImports = (
             // returns u256
             getBlockDifficulty: function (resulltOffset_i32ptr_u256) {
                 const value = jsvm_env.getBlockDifficulty();
-                jsvm_env.storeMemory(value, resulltOffset_i32ptr_u256);
+                jsvm_env.storeMemory(value, toBN(resulltOffset_i32ptr_u256));
 
                 logger.debug('getBlockDifficulty', [resulltOffset_i32ptr_u256], [value], getCache(), getMemory());
             },
@@ -223,12 +221,12 @@ const initializeImports = (
                 codeOffset_i32,
                 dataLength_i32,
             ) {
-                const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
+                const address = readAddress(jsvm_env, toBN(addressOffset_i32ptr_address));
                 jsvm_env.externalCodeCopy(
                     address,
-                    resultOffset_i32ptr_bytes,
-                    codeOffset_i32,
-                    dataLength_i32,
+                    toBN(resultOffset_i32ptr_bytes),
+                    toBN(codeOffset_i32),
+                    toBN(dataLength_i32),
                 )
                 logger.debug('externalCodeCopy', [addressOffset_i32ptr_address,
                     resultOffset_i32ptr_bytes,
@@ -238,7 +236,7 @@ const initializeImports = (
             },
             // Returns extCodeSize i32
             getExternalCodeSize: function (addressOffset_i32ptr_address) {
-                const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
+                const address = readAddress(jsvm_env, toBN(addressOffset_i32ptr_address));
                 const result = jsvm_env.getExternalCodeSize(address);
                 logger.debug('getExternalCodeSize', [addressOffset_i32ptr_address], [result], getCache(), getMemory());
                 return result;
@@ -257,7 +255,7 @@ const initializeImports = (
             },
             getTxGasPrice: function (resultOffset_i32ptr_u128) {
                 const value = jsvm_env.getTxGasPrice();
-                jsvm_env.storeMemory(value, resultOffset_i32ptr_u128);
+                jsvm_env.storeMemory(value, toBN(resultOffset_i32ptr_u128));
 
                 logger.debug('getTxGasPrice', [resultOffset_i32ptr_u128], [value], getCache(), getMemory());
             },
@@ -278,10 +276,10 @@ const initializeImports = (
                 // });
 
                 jsvm_env.log(
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
-                    numberOfTopics_i32,
-                    topics,
+                    toBN(dataOffset_i32ptr_bytes),
+                    toBN(dataLength_i32),
+                    toBN(numberOfTopics_i32),
+                    topics.map(topic => toBN(topic)),
                 );
                 logger.debug('log', [dataOffset_i32ptr_bytes,
                     dataLength_i32,
@@ -297,19 +295,21 @@ const initializeImports = (
             },
             getTxOrigin: function (resultOffset_i32ptr_address) {
                 const address = jsvm_env.getTxOrigin();
-                jsvm_env.storeMemory(address, resultOffset_i32ptr_address);
+                jsvm_env.storeMemory(address, toBN(resultOffset_i32ptr_address));
                 logger.debug('getTxOrigin', [resultOffset_i32ptr_address], [address], getCache(), getMemory());
             },
             finish: function (dataOffset_i32ptr_bytes, dataLength_i32) {
-                const res = jsvm_env.finish(dataOffset_i32ptr_bytes, dataLength_i32);
+                const res = jsvm_env.finish(toBN(dataOffset_i32ptr_bytes), toBN(dataLength_i32));
                 logger.debug('finish', [dataOffset_i32ptr_bytes, dataLength_i32], [res], getCache(), getMemory());
                 finishAction(res);
+                throw new Error(ERROR.STOP);
             },
             revert: function (dataOffset_i32ptr_bytes, dataLength_i32) {
-                const res = jsvm_env.revert(dataOffset_i32ptr_bytes, dataLength_i32);
+                const res = jsvm_env.revert(toBN(dataOffset_i32ptr_bytes), toBN(dataLength_i32));
                 console.log('revert');
                 logger.debug('revert', [dataOffset_i32ptr_bytes, dataLength_i32], [res], getCache(), getMemory());
                 revertAction(res);
+                throw new Error(ERROR.STOP);
             },
             // result dataSize i32
             getReturnDataSize: function () {
@@ -318,14 +318,15 @@ const initializeImports = (
                 return result;
             },
             returnDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
-                jsvm_env.returnDataCopy(resultOffset_i32ptr_bytes, dataOffset_i32, length_i32);
+                jsvm_env.returnDataCopy(toBN(resultOffset_i32ptr_bytes), toBN(dataOffset_i32), toBN(length_i32));
                 logger.debug('returnDataCopy', [resultOffset_i32ptr_bytes, dataOffset_i32, length_i32], [], getCache(), getMemory());
             },
             selfDestruct: function (addressOffset_i32ptr_address) {
-                const address = readAddress(jsvm_env, addressOffset_i32ptr_address);
+                const address = readAddress(jsvm_env, toBN(addressOffset_i32ptr_address));
                 jsvm_env.selfDestruct(address);
                 logger.debug('selfDestruct', [addressOffset_i32ptr_address], [], getCache(), getMemory());
                 finishAction();
+                throw new Error(ERROR.STOP);
             },
             // result blockTimestamp i64,
             getBlockTimestamp: function () {
@@ -333,8 +334,9 @@ const initializeImports = (
                 logger.debug('getBlockTimestamp', [], [result], getCache(), getMemory());
                 return result;
             }
-        }
     }
+
+    return {ethereum};
 }
 
 const instantiateModule = instantiateWasm;

@@ -88,6 +88,7 @@ const toBN = n => {
     }
     if (n instanceof Uint8Array) return uint8arrToBN(n);
     if (BN.isBN(n)) return n;
+    if (typeof n === 'bigint') return new BN(n.toString());
     return new BN(n);
 }
 

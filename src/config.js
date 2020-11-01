@@ -80,22 +80,22 @@ const txhandler = (msg, txobj) => {
     const newobj = {from, to, value, data: data ? printval(data.slice(0,50)) : null};
     return msg + ' ' + JSON.stringify(newobj);
 }
-const contexthandler = (msg, txobj) => {
+const contexthandler = (msg, txobj={}) => {
     const printobj = {};
     Object.keys(txobj).forEach(key => {
         const {address, balance, storage, runtimeCode} = txobj[key];
-        printobj[key] = {address, balance: balance.toString(), storage, runtimeCode: runtimeCode ? printval(runtimeCode.slice(0, 50)) : null};
+        printobj[key] = {address, balance: balance ? balance.toString() : '0', storage, runtimeCode: runtimeCode ? printval(runtimeCode.slice(0, 50)) : null};
     })
     return msg + ' ' + printval(printobj);
 }
 
 const Logger = logg('', LEVELS.SILENT, null, [], []);
 Logger.spawn('jsvm');
-Logger.spawn('ewasmvm');
+Logger.spawn('ewasmjsvm');
 Logger.spawn('evmjs');
 Logger.get('jsvm').spawn('tx', null, txhandler);
-Logger.get('ewasmvm').spawn('tx', null, txhandler);
-Logger.get('ewasmvm').spawn('context', null, contexthandler);
+Logger.get('ewasmjsvm').spawn('tx', null, txhandler);
+Logger.get('ewasmjsvm').spawn('context', null, contexthandler);
 Logger.get('evmjs').spawn('tx', null, txhandler);
 Logger.get('evmjs').spawn('context', null, contexthandler);
 

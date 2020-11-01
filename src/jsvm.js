@@ -12,6 +12,9 @@ const {
     toBN,
 }  = require('./utils.js');
 
+// Uint8Array:
+// address, value, storage key
+
 function jsvm(initPersistence, initBlocks, initLogs, Logger) {
     const persistence = initPersistence();
     const blocks = initBlocks();
@@ -22,7 +25,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         const parsedValue = toBN(value);
         const fromBalance = persistenceApi.get(from).balance;
         const toBalance = persistenceApi.get(to).balance;
-        Logger.get('jsvm').get('transferValue').debug('---', fromBalance, fromBalance.toNumber(), toBalance.toNumber(), parsedValue.toNumber());
+        Logger.get('jsvm').get('transferValue').debug('---', fromBalance.toString(), toBalance.toString(), parsedValue.toString());
         if (fromBalance.lt(parsedValue)) throw new Error('Not enough balance.');
 
         persistenceApi.updateBalance(to, toBalance.add(parsedValue));
@@ -39,7 +42,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         const persistenceWrap = initPersistence(cache.context);
         Logger.get('jsvm').get('persistenceWrap').debug(Object.keys(cache.context));
         persistenceWrap._get = persistenceWrap.get;
-        persistenceWrap.get = (account) => {
+        persistenceWrap.get = function (account) {
             if (!account) throw new Error('Account not provided');
             const result = persistenceWrap._get(account);
             // if result is not cached
@@ -48,6 +51,13 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 asyncResourceWrap(account);
                 // execution stops here
                 throw new Error(ERROR.ASYNC_RESOURCE);
+            }
+            result.getStorage = (key) => {
+                return result.storage[key];
+            }
+            result.setStorage = (key, value) => {
+                result.storage[key] = value;
+                persistenceWrap.set(result);
             }
             return result;
         }
@@ -137,11 +147,13 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         }
         const storageStore = (key, value) => {
             Logger.get('jsvm').get('storage').debug('store', key, value);
-            storageMap()[uint8ArrayToHex(key)] = value;
+            key = uint8ArrayToHex(key);
+            getInstance().setStorage(key, value);
         }
         const storageLoad = (key) => {
             Logger.get('jsvm').get('storage').debug('load', key);
-            return storageMap()[uint8ArrayToHex(key)] || hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
+            key = uint8ArrayToHex(key);
+            return getInstance().getStorage(key) || hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
         }
 
         const vmapi = {
@@ -190,11 +202,13 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 callDataCopy: function (resultOffset, dataOffset, length) {
                     resultOffset = resultOffset.toNumber();
                     dataOffset = dataOffset.toNumber();
+                    const data = txObj.data.slice(dataOffset, dataOffset + length)
                     storeMemory(
-                        txObj.data.slice(dataOffset, dataOffset + length),
+                        data,
                         resultOffset,
                         length,
                     );
+                    return data;
                 },
                 // returns i32
                 getCallDataSize: function () {
@@ -216,8 +230,6 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 ) {
                     dataOffset = dataOffset.toNumber();
                     dataLength = dataLength.toNumber();
-                    outputOffset = outputOffset.toNumber();
-                    outputLength = outputLength.toNumber();
                     Logger.get('jsvm').get('call').debug(address, value,dataOffset, dataLength);
 
                     const data = loadMemory(dataOffset, dataLength);
@@ -253,6 +265,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     );
 
                     if (outputOffset && outputLength) {
+                        outputOffset = outputOffset.toNumber();
+                        outputLength = outputLength.toNumber();
                         storeMemory(cachedResult.result.data, outputOffset, outputLength);
                     }
                     setReturnData(cachedResult.result.data);
@@ -273,9 +287,6 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 ) {
                     dataOffset = dataOffset.toNumber();
                     dataLength = dataLength.toNumber();
-                    outputOffset = outputOffset.toNumber();
-                    outputLength = outputLength.toNumber();
-
                     Logger.get('jsvm').get('callCode').debug(gas_limit_i64, address, value, dataOffset, dataLength);
 
                     const data = loadMemory(dataOffset, dataLength);
@@ -294,7 +305,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
-                    Logger.get('jsvm').get('call').debug('cachedResult', cachedResult);
+                    Logger.get('jsvm').get('callCode').debug('cachedResult', cachedResult);
 
                     if (!cachedResult) {
                         const clonedContext = cloneContext(getCache().context);
@@ -318,6 +329,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     );
 
                     if (outputOffset && outputLength) {
+                        outputOffset = outputOffset.toNumber();
+                        outputLength = outputLength.toNumber();
                         storeMemory(cachedResult.result.data, outputOffset, outputLength);
                     }
                     setReturnData(cachedResult.result.data);
@@ -335,12 +348,10 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 ) {
                     dataOffset = dataOffset.toNumber();
                     dataLength = dataLength.toNumber();
-                    outputOffset = outputOffset.toNumber();
-                    outputLength = outputLength.toNumber();
 
                     // identical to a message call except the code at the target address is executed in the context of the calling contract
                     // msg.sender and msg.value do not change their values.
-                    Logger.get('jsvm').get('callCode').debug(gas_limit_i64, address, valueOffset_i32ptr_u128, dataOffset, dataLength);
+                    Logger.get('jsvm').get('callDelegate').debug(gas_limit_i64, address, valueOffset_i32ptr_u128, dataOffset, dataLength);
 
                     const data = loadMemory(dataOffset, dataLength);
                     const hexaddress = extractAddress(address);
@@ -358,7 +369,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
-                    Logger.get('jsvm').get('call').debug('cachedResult', cachedResult);
+                    Logger.get('jsvm').get('callDelegate').debug('cachedResult', cachedResult);
 
                     if (!cachedResult) {
                         const clonedContext = cloneContext(getCache().context);
@@ -376,6 +387,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     currentCacheIndex += 1;
 
                     if (outputOffset && outputLength) {
+                        outputOffset = outputOffset.toNumber();
+                        outputLength = outputLength.toNumber();
                         storeMemory(cachedResult.result.data, outputOffset, outputLength);
                     }
                     setReturnData(cachedResult.result.data);
@@ -393,9 +406,6 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 ) {
                     dataOffset = dataOffset.toNumber();
                     dataLength = dataLength.toNumber();
-                    outputOffset = outputOffset.toNumber();
-                    outputLength = outputLength.toNumber();
-
                     Logger.get('jsvm').get('callStatic').debug(address, dataOffset, dataLength);
 
                     const data = loadMemory(dataOffset, dataLength);
@@ -425,6 +435,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     currentCacheIndex += 1;
 
                     if (outputOffset && outputLength) {
+                        outputOffset = outputOffset.toNumber();
+                        outputLength = outputLength.toNumber();
                         storeMemory(cachedResult.result.data, outputOffset, outputLength);
                     }
                     setReturnData(cachedResult.result.data);
@@ -457,6 +469,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
 
                     const runtime = getInstance().runtimeCode.slice(codeOffset, codeOffset + length)
                     storeMemory(runtime, resultOffset, length)
+                    return runtime;
                 },
                 // returns i32 - code size current env
                 getCodeSize: function() {
@@ -477,6 +490,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     dataLength,
                 ) {
                     dataOffset = dataOffset.toNumber();
+                    dataLength = dataLength.toNumber();
 
                     const runtimeCode = loadMemory(dataOffset, dataLength);
                     const address = persistence.set({ runtimeCode, balance: toBN(balance) });
@@ -502,7 +516,6 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     codeOffset,
                     dataLength,
                 ) {
-                    console.log('externalCodeCopy222', address, resultOffset, codeOffset, dataLength)
                     address = extractAddress(address);
                     resultOffset = resultOffset.toNumber();
                     codeOffset = codeOffset.toNumber();
@@ -526,7 +539,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     return gas.limit.sub(gas.used);
                 },
                 getBlockGasLimit: function () {
-                    return block.gasLimit;
+                    return getGas().limit;
                 },
                 getTxGasPrice: function () {
                     const size = 32;

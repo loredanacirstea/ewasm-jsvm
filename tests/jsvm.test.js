@@ -1,126 +1,15 @@
-const fs = require('fs');
-const { exec } = require('child_process');
 const { ethers } = require('ethers');
+const { compileContracts } = require('./setup/setup');
 const { ewasmjsvm: _ewasmjsvm, evmjs: _evmjs } = require('../src/index.js');
 const utils = require('../src/utils.js');
-const { uint8ArrayToHex } = require('../src/utils.js');
+const { uint8ArrayToHex, hexToUint8Array } = require('../src/utils.js');
 const {Logger} = require('../src/config');
-const evm = require('../src/evm.js');
 
 const ewasmjsvm = _ewasmjsvm();
 const evmjs = _evmjs();
+const jsvms = {evmjs, ewasmjsvm};
 const checksum = ethers.utils.getAddress;
 const {toBN} = utils;
-
-const C_PATH = './tests/contracts';
-const SOL_PATH = './tests/sol';
-const B_PATH = './tests/build';
-const solToYul = name => `solc --ir -o ${C_PATH} ${SOL_PATH}/${name}.sol --overwrite`;
-const yulToEwasm = name => `solc --strict-assembly --optimize --yul-dialect evm --machine ewasm ${C_PATH}/${name}.yul`;
-const yulToEvm = name => `solc --strict-assembly --optimize --yul-dialect evm --machine evm ${C_PATH}/${name}.yul`;
-// const yulToEwasm = name => `solc --strict-assembly --yul-dialect evm --machine ewasm ${C_PATH}/${name}.yul`;
-const watToWasm = name => `wat2wasm build_wat/${name}.wat -o build_wasm/${name}.wasm`;
-
-const c1Abi = [
-    { name: 'main', type: 'fallback', inputs: [], outputs: [{ name: 'val', type: 'uint256' }]},
-]
-
-const c2Abi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [], outputs: [{ name: 'val', type: 'uint256' }]},
-]
-
-let c3Abi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [
-        { name: 'addr', type: 'address' },
-        { name: 'account', type: 'address' },
-    ], outputs: [
-        { name: 'addr', type: 'address' },
-        { name: 'caller', type: 'address' },
-        { name: 'addr_balance', type: 'address' }, // 16  fix
-        { name: 'callvalue', type: 'uint16' },  // 16
-        { name: 'calldatasize', type: 'uint8' }, // 8
-        { name: 'origin', type: 'address' },  // 20
-        { name: 'difficulty', type: 'uint256' }, // 32
-        { name: 'stored_addr', type: 'address' }, // ?addr  fix
-        { name: 'gas_left', type: 'uint256' },
-        { name: 'blockhash', type: 'bytes32' }, // fix
-        { name: 'gaslimit', type: 'uint' },
-        { name: 'gasprice', type: 'uint' },
-        { name: 'number', type: 'uint' }, // fix
-        { name: 'timestamp', type: 'uint' },
-        { name: 'coinbase', type: 'address' },
-        { name: 'codesize', type: 'uint' },
-        { name: 'calldata', type: 'address' },
-        { name: 'extcodesize', type: 'uint' },
-        { name: 'extcodecopy', type: 'bytes32' },
-    ]},
-]
-
-const c4Abi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [], outputs: [{ name: 'val', type: 'uint256' }]},
-]
-
-const c5Abi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [], outputs: []},
-]
-
-const c6Abi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [{ name: 'addr', type: 'address' }], outputs: [{ name: 'balance', type: 'uint' }]},
-]
-
-const c7Abi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [], outputs: [{ name: 'addr', type: 'address' }]},
-]
-
-const c7bAbi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [{ name: 'calldata', type: 'bytes' }], outputs: [{ name: 'addr', type: 'address' }]},
-]
-
-const c8Abi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [], outputs: []},
-]
-
-const c9Abi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [{ name: 'addr', type: 'address'}, { name: 'addr2', type: 'address'}], outputs: [{ name: 'result', type: 'bytes'}]},
-]
-
-const c9_Abi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [{ name: 'addr', type: 'address'}], outputs: [{ name: 'val', type: 'uint256' }]},
-]
-
-const c10Abi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'sum', type: 'function', inputs: [{ name: 'a', type: 'uint256'}, { name: 'b', type: 'uint256'}], outputs: [{ name: 'c', type: 'uint256'}]},
-    { name: 'double', type: 'function', inputs: [{ name: 'a', type: 'uint256'}], outputs: [{ name: 'b', type: 'uint256'}]},
-    { name: 'value', type: 'function', inputs: [], outputs: [{ name: 'b', type: 'uint256'}]},
-    { name: 'addvalue', type: 'function', inputs: [{ name: '_value', type: 'uint256'}], outputs: [{ name: 'b', type: 'uint256'}]},
-    { name: '_revert', type: 'function', inputs: [], outputs: []},
-
-    { name: 'testAddress', type: 'function', inputs: [{ name: 'addr', type: 'address'}], outputs: [{ name: 'addr', type: 'address'}]},
-]
-
-const c12Abi = [
-    // { name: 'constructor', type: 'constructor', inputs: [{ name: '_externalc', type: 'address'}], outputs: []},
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'test_staticcall', type: 'function', inputs: [{ name: 'externalc', type: 'address'}, { name: 'a', type: 'uint256'}, { name: 'b', type: 'uint256'}], outputs: [{ name: 'c', type: 'uint256'}]},
-    { name: 'test_staticcall_address', type: 'function', inputs: [{ name: 'externalc', type: 'address'}, { name: 'addr', type: 'address'}], outputs: [{ name: 'c', type: 'uint256'}]},
-    { name: 'test_call', type: 'function', inputs: [{ name: 'externalc', type: 'address'}, { name: 'a', type: 'uint256'}], outputs: [{ name: 'result', type: 'uint256'}]},
-]
-
-const taylorAbi = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
-    { name: 'main', type: 'fallback', inputs: [{ name: 'data', type: 'bytes'}], outputs: [{ name: 'result', type: 'bytes' }]},
-]
 
 const DEFAULT_TX_INFO = {
     gasLimit: 1000000,
@@ -129,8 +18,6 @@ const DEFAULT_TX_INFO = {
     value: 0,
 }
 
-const contracts = {};
-const deployments = {};
 const accounts = [
     {
         address: '0x79f379cebbd362c99af2765d1fa541415aa78508',
@@ -142,67 +29,8 @@ const accounts = [
     }
 ]
 
-const compile = name => new Promise((resolve, reject) => {
-    const command = yulToEwasm(name);
-    Logger.get('tests').get('compile').debug('Running command: ' + command);
-    exec(command, (error, stdout, stderr) => {
-        if (error) {
-            console.log(`error: ${error.message}`);
-            reject(error);
-        }
-        if (stderr) {
-            Logger.get('tests').get('compile').warn(stderr);
-            // reject(error);
-        }
-        resolve(parseCompilerOutput(stdout));
-    });
-});
+// const exampleArr = [...new Array(count)].map(() => '0x' + [...new Array(size)].map((_, i) => (i+1).toString(16).padStart(2, '0')).join(''))
 
-const compileSol = name => new Promise((resolve, reject) => {
-    const command = solToYul(name);
-    Logger.get('tests').get('compileSol').debug('Running command: ' + command);
-    exec(command, async (error, stdout, stderr) => {
-        if (error) {
-            console.log(`error: ${error.message}`);
-            reject(error);
-        }
-        if (stderr) {
-            Logger.get('tests').get('compileSol').warn(stderr);
-        }
-        // The .yul file has been created
-        resolve();
-    });
-});
-
-beforeAll(async () => {
-    // Compile contracts
-    let sol_names = await promisify(fs.readdir, SOL_PATH).catch(console.log);
-    sol_names = sol_names.map(name => name.replace('.sol', ''));
-    for (name of sol_names) {
-        await compileSol(name);
-    }
-
-    let names = await promisify(fs.readdir, C_PATH).catch(console.log);
-    names = names.map(name => name.replace('.yul', ''));
-    names = names.filter(n => n !== 'taylor');  // takes too much time
-    // names = ['c11', 'c12']
-
-    for (name of names) {
-        contracts[name] = await compile(name);
-        createBuild(name, contracts[name]);
-    }
-
-    // Assign balances to accounts
-    accounts.forEach(account => {
-        account.address = account.address.toLowerCase();
-        ewasmjsvm.getPersistence().set(account);
-
-        const entry = ewasmjsvm.getPersistence().get(account.address);
-        expect(entry.balance.toNumber()).toBe(account.balance);
-    });
-
-    return;
-}, 20000);
 
 it('test utils', async function () {
     let a;
@@ -213,244 +41,275 @@ it('test utils', async function () {
     expect(utils.uint8ArrayToHex(utils.hexToUint8Array(a))).toBe(a.toLowerCase());
 });
 
-it('test c1', async function () {
-    const ewmodule = await ewasmjsvm.runtimeSim(contracts.c1.bin, c1Abi);
-    deployments.c1 = ewmodule;
-    const answ = await ewmodule.main({...DEFAULT_TX_INFO});
-    expect(answ.val._hex).toBe('0xeeeeeeeeeeeeee');
-});
+describe.only.each([
+    ['ewasmjsvm', 'bin'],
+    // ['evmjs', 'evm'],
+])('testsuite: %s )', (name, field) => {
+    let resp;
+    let contracts;
+    const deployments = {};
+    const jsvm = jsvms[name];
 
-it('test c2', async function () {
-    const runtime = await ewasmjsvm.deploy(contracts.c2.bin, c2Abi)({...DEFAULT_TX_INFO});
-    deployments.c2 = runtime;
-    const answ = await runtime.main({...DEFAULT_TX_INFO});
-    expect(answ.val.toNumber()).toBe(999999);
-});
+    beforeAll(async () => {
+        contracts = await compileContracts();
 
-it('test c3 multi', async function () {
-    const tx_info = {...DEFAULT_TX_INFO, value: 1400};
-    let fromBalance = ewasmjsvm.getPersistence().get(tx_info.from).balance;
-    const runtime = await ewasmjsvm.deploy(contracts.c3.bin, c3Abi)(tx_info);
-    deployments.c3 = runtime;
+        // Assign balances to accounts
+        accounts.forEach(account => {
+            account.address = account.address.toLowerCase();
+            ewasmjsvm.getPersistence().set(account);
 
-    fromBalance = fromBalance.sub(toBN(tx_info.value));
-    expect(ewasmjsvm.getPersistence().get(tx_info.from).balance.toString()).toBe(fromBalance.toString());
-    expect(ewasmjsvm.getPersistence().get(runtime.address).balance.toString()).toBe(tx_info.value.toString());
+            const entry = ewasmjsvm.getPersistence().get(account.address);
+            expect(entry.balance.toNumber()).toBe(account.balance);
 
-    const address2 = deployments.c2.address;
-    const answ = await runtime.main(address2, accounts[0].address, tx_info);
-    const block = ewasmjsvm.getBlock('latest');
 
-    expect(answ.addr).toBe(checksum(runtime.address));
-    expect(answ.caller).toBe(checksum(tx_info.from));
-    // TODO
-    // expect(answ.addr_balance).toBe(accounts[0].balance);
-    expect(answ.callvalue).toBe(tx_info.value);
-    expect(answ.calldatasize).toBe(64);
-    expect(answ.calldata).toBe(checksum(address2));
-    expect(answ.origin).toBe(checksum(tx_info.from));
-    expect(answ.difficulty.toNumber()).toBe(block.difficulty);
-    expect(answ.stored_addr).toBe(checksum(runtime.address));
-    expect(answ.gas_left.toNumber()).toBe(tx_info.gasLimit);
-    expect(answ.blockhash).toBe(block.hash);
-    expect(answ.gaslimit.toNumber()).toBe(30000000);
-    expect(answ.gasprice.toNumber()).toBe(tx_info.gasPrice);
-    expect(answ.number.toNumber()).toBe(block.number);
-    expect(answ.timestamp.toNumber()).toBe(block.timestamp);
-    expect(answ.coinbase).toBe(checksum(block.coinbase));
-    expect(answ.codesize.toNumber()).toBe(runtime.bin.length);
-    expect(answ.extcodesize.toNumber()).toBe(deployments.c2.bin.length);
-    expect(answ.extcodecopy).toBe(utils.uint8ArrayToHex(deployments.c2.bin.slice(32, 64)));
-});
+            evmjs.getPersistence().set(account);
+            const entry2 = evmjs.getPersistence().get(account.address);
+            expect(entry2.balance.toNumber()).toBe(account.balance);
+        });
 
-it('test c4 revert', async function () {
-    const runtime = await ewasmjsvm.deploy(contracts.c4.bin, c4Abi)(DEFAULT_TX_INFO);
-    deployments.c4 = runtime;
+        return;
+    }, 20000);
 
-    await expect(() => {
-        return runtime.main(DEFAULT_TX_INFO);
-    }).rejects.toThrow(/Revert: 0x00000000000000000000000000000000000000000000000000eeeeeeeeeeeeee/);
-});
-
-it('test c5 logs', async function () {
-    const runtime = await ewasmjsvm.deploy(contracts.c5.bin, c5Abi)(DEFAULT_TX_INFO);
-    deployments.c5 = runtime;
-    await runtime.main(DEFAULT_TX_INFO);
-
-    const block = ewasmjsvm.getBlock('latest');
-    const logs = ewasmjsvm.getLogs().getBlockLogs(block.number);
-
-    logs.forEach(log => {
-        const data = utils.decode([{type: 'uint', name: 'data'}], log.data).data;
-        expect(log.blockNumber).toBe(block.number);
-        expect(data.toNumber()).toBe(777777);
+    it('test c1', async function () {
+        const runtime = await jsvm.runtimeSim(contracts.c1[field], contracts.c1.abi);
+        deployments.c1 = runtime;
+        const answ = await runtime.main({...DEFAULT_TX_INFO});
+        expect(answ.val._hex).toBe('0xeeeeeeeeeeeeee');
     });
-    expect(logs[0].topics.length).toBe(0);
-    expect(logs[1].topics.length).toBe(1);
-    expect(logs[2].topics.length).toBe(2);
-    expect(logs[3].topics.length).toBe(3);
-    expect(logs[4].topics.length).toBe(4);
 
-    expect(logs[1].topics[0]).toBe(55555619);
+    it('test c2', async function () {
+        const runtime = await jsvm.deploy(contracts.c2[field], contracts.c2.abi)({...DEFAULT_TX_INFO});
+        deployments.c2 = runtime;
+        const answ = await runtime.main({...DEFAULT_TX_INFO});
+        expect(answ.val.toNumber()).toBe(999999);
+    });
 
-    expect(logs[2].topics[0]).toBe(55555618);
-    expect(logs[2].topics[1]).toBe(55555617);
+    it('test c3 multi', async function () {
+        const tx_info = {...DEFAULT_TX_INFO, value: 1400};
+        let fromBalance = jsvm.getPersistence().get(tx_info.from).balance;
+        const runtime = await jsvm.deploy(contracts.c3[field], contracts.c3.abi)(tx_info);
+        deployments.c3 = runtime;
+        fromBalance = fromBalance.sub(toBN(tx_info.value));
+        expect(jsvm.getPersistence().get(tx_info.from).balance.toString()).toBe(fromBalance.toString());
+        expect(jsvm.getPersistence().get(runtime.address).balance.toString()).toBe(tx_info.value.toString());
 
-    expect(logs[3].topics[0]).toBe(55555616);
-    expect(logs[3].topics[1]).toBe(55555615);
-    expect(logs[3].topics[2]).toBe(55555614);
+        const address2 = deployments.c2.address;
+        const answ = await runtime.main(address2, accounts[0].address, tx_info);
+        const block = jsvm.getBlock('latest');
 
-    expect(logs[4].topics[0]).toBe(55555613);
-    expect(logs[4].topics[1]).toBe(55555612);
-    expect(logs[4].topics[2]).toBe(55555611);
-    expect(logs[4].topics[3]).toBe(55555610);
+        expect(answ.addr).toBe(checksum(runtime.address));
+        expect(answ.caller).toBe(checksum(tx_info.from));
+        // TODO
+        // expect(answ.addr_balance).toBe(accounts[0].balance);
+        expect(answ.callvalue).toBe(tx_info.value);
+        expect(answ.calldatasize).toBe(64);
+        expect(answ.origin).toBe(checksum(tx_info.from));
+        expect(answ.difficulty.toNumber()).toBe(block.difficulty);
+        expect(answ.stored_addr).toBe(checksum(runtime.address));
+        expect(answ.gas_left.toNumber()).toBe(tx_info.gasLimit);
+        expect(answ.blockhash).toBe(block.hash);
+        expect(answ.gaslimit.toNumber()).toBe(30000000);
+        expect(answ.gasprice.toNumber()).toBe(tx_info.gasPrice);
+        expect(answ.number.toNumber()).toBe(block.number);
+        expect(answ.timestamp.toNumber()).toBe(block.timestamp);
+        expect(answ.coinbase).toBe(checksum(block.coinbase));
+        expect(answ.codesize.toNumber()).toBe(runtime.bin.length);
+        expect(answ.calldata).toBe(checksum(address2));
+        // expect(answ.extcodesize.toNumber()).toBe(deployments.c2.bin.length);
+        // expect(answ.extcodecopy).toBe(utils.uint8ArrayToHex(deployments.c2.bin.slice(32, 64)));
+    });
 
-    // TODO: FIXME - these values should be correct
-    // expect(logs[1].topics).toBe([55555555]);
-    // expect(logs[2].topics).toBe([55555554, 55555553]);
-    // expect(logs[3].topics).toBe([55555552, 55555551, 55555550]);
-    // expect(logs[4].topics).toBe([55555549, 55555548, 55555547, 55555546]);
-});
+    it('test c4 revert', async function () {
+        const runtime = await jsvm.deploy(contracts.c4[field], contracts.c4.abi)(DEFAULT_TX_INFO);
+        deployments.c4 = runtime;
 
-it('test c6 getExternalBalance', async function () {
-    const runtime = await ewasmjsvm.deploy(contracts.c6.bin, c6Abi)(DEFAULT_TX_INFO);
-    deployments.c6 = runtime;
+        await expect(() => {
+            return runtime.main(DEFAULT_TX_INFO);
+        }).rejects.toThrow(/Revert: 0x00000000000000000000000000000000000000000000000000eeeeeeeeeeeeee/);
+    });
 
-    // TODO
-    // expect(
-    //     ewasmjsvm.getPersistence().get(accounts[0].address).balance
-    // ).toBe(accounts[0].balance);
+    it('test c5 logs', async function () {
+        const runtime = await jsvm.deploy(contracts.c5[field], contracts.c5.abi)(DEFAULT_TX_INFO);
+        deployments.c5 = runtime;
+        await runtime.main(DEFAULT_TX_INFO);
 
-    const answ = await runtime.main(accounts[0].address, DEFAULT_TX_INFO);
-    // expect(answ.balance).toBe(accounts[0].balance);
-});
+        const block = jsvm.getBlock('latest');
+        const logs = jsvm.getLogs().getBlockLogs(block.number);
 
-it('test c7 - create', async function () {
-    const tx_info = {...DEFAULT_TX_INFO, value: 1400};
-    const runtime = await ewasmjsvm.deploy(contracts.c7.bin, c7Abi)(DEFAULT_TX_INFO);
-    deployments.c7 = runtime;
-    let { addr } = await runtime.main(tx_info);
-    addr = addr.toLowerCase();
+        logs.forEach(log => {
+            const data = utils.decode([{type: 'uint', name: 'data'}], log.data).data;
+            expect(log.blockNumber).toBe(block.number);
+            expect(data.toNumber()).toBe(777777);
+        });
+        expect(logs[0].topics.length).toBe(0);
+        expect(logs[1].topics.length).toBe(1);
+        expect(logs[2].topics.length).toBe(2);
+        expect(logs[3].topics.length).toBe(3);
+        expect(logs[4].topics.length).toBe(4);
 
-    const createdContract = ewasmjsvm.getPersistence().get(addr);
-    expect(createdContract.balance.toString()).toBe(tx_info.value.toString());
-    expect(createdContract.runtimeCode).not.toBeNull();
+        expect(logs[1].topics[0].toNumber()).toBe(55555555);
 
-    const cinstance = await ewasmjsvm.runtimeSim(createdContract.runtimeCode, [c2Abi[1]], addr);
-    const answ = await cinstance.main(DEFAULT_TX_INFO);
-    expect(answ.val.toNumber()).toBe(999999);
-});
+        expect(logs[2].topics[0].toNumber()).toBe(55555554);
+        expect(logs[2].topics[1].toNumber()).toBe(55555553);
 
-it('test c7b - create from calldata', async function () {
-    const tx_info = {...DEFAULT_TX_INFO, value: 1400};
-    const runtime = await ewasmjsvm.deploy(contracts.c7b.bin, c7bAbi)(DEFAULT_TX_INFO);
-    tx_info.data = '0x' + contracts.c1.bin;
+        expect(logs[3].topics[0].toNumber()).toBe(55555552);
+        expect(logs[3].topics[1].toNumber()).toBe(55555551);
+        expect(logs[3].topics[2].toNumber()).toBe(55555550);
 
-    let { addr } = await runtime.mainRaw(tx_info);
-    addr = addr.toLowerCase();
+        expect(logs[4].topics[0].toNumber()).toBe(55555549);
+        expect(logs[4].topics[1].toNumber()).toBe(55555548);
+        expect(logs[4].topics[2].toNumber()).toBe(55555547);
+        expect(logs[4].topics[3].toNumber()).toBe(55555546);
+    });
 
-    const createdContract = ewasmjsvm.getPersistence().get(addr);
-    expect(createdContract.balance.toString()).toBe(tx_info.value.toString());
-    expect(createdContract.runtimeCode).not.toBeNull();
+    it.skip('test c6 getExternalBalance', async function () {
+        const runtime = await jsvm.deploy(contracts.c6[field], contracts.c6.abi)(DEFAULT_TX_INFO);
+        deployments.c6 = runtime;
 
-    const cinstance = await ewasmjsvm.runtimeSim(createdContract.runtimeCode, [c2Abi[1]])
-    const answ = await cinstance.main(DEFAULT_TX_INFO);
-    expect(answ.val._hex).toBe('0xeeeeeeeeeeeeee');
-});
+        // TODO
+        // expect(
+        //     jsvm.getPersistence().get(accounts[0].address).balance.toNumber()
+        // ).toBe(accounts[0].balance);
 
-it('test c8 selfDestruct', async function () {
-    const tx_info = {...DEFAULT_TX_INFO, value: 800000};
-    let fromBalance = ewasmjsvm.getPersistence().get(tx_info.from).balance;
+        const answ = await runtime.main(accounts[0].address, DEFAULT_TX_INFO);
+        // expect(answ.balance).toBe(accounts[0].balance);
+    });
 
-    const runtime = await ewasmjsvm.deploy(contracts.c8.bin, c8Abi)(tx_info);
-    deployments.c8 = runtime;
+    it('test c7 - create', async function () {
+        const tx_info = {...DEFAULT_TX_INFO, value: 1400};
+        const runtime = await jsvm.deploy(contracts.c7[field], contracts.c7.abi)(DEFAULT_TX_INFO);
+        deployments.c7 = runtime;
+        let { addr } = await runtime.main(tx_info);
+        addr = addr.toLowerCase();
 
-    fromBalance = fromBalance.sub(toBN(tx_info.value));
-    expect(ewasmjsvm.getPersistence().get(tx_info.from).balance.toString()).toBe(fromBalance.toString());
-    expect(ewasmjsvm.getPersistence().get(runtime.address).balance.toString()).toBe(tx_info.value.toString());
-    expect(uint8ArrayToHex(ewasmjsvm.getPersistence().get(runtime.address).runtimeCode)).toBe(uint8ArrayToHex(runtime.bin));
+        const createdContract = jsvm.getPersistence().get(addr);
+        expect(createdContract.balance.toString()).toBe(tx_info.value.toString());
+        expect(createdContract.runtimeCode).not.toBeNull();
 
-    await runtime.main(DEFAULT_TX_INFO);
+        const cinstance = await jsvm.runtimeSim(createdContract.runtimeCode, [contracts.c2.abi[1]], addr);
+        const answ = await cinstance.main(DEFAULT_TX_INFO);
+        expect(answ.val.toNumber()).toBe(999999);
+    });
 
-    fromBalance = fromBalance.add(toBN(tx_info.value));
-    expect(ewasmjsvm.getPersistence().get(tx_info.from).balance.toString()).toBe(fromBalance.toString());
-    expect(ewasmjsvm.getPersistence().get(runtime.address).balance.toString()).toBe('0');
-    expect(ewasmjsvm.getPersistence().get(runtime.address).runtimeCode).toBeUndefined();
-});
+    it('test c7b - create from calldata', async function () {
+        const tx_info = {...DEFAULT_TX_INFO, value: 1400};
+        const runtime = await jsvm.deploy(contracts.c7b[field], contracts.c7b.abi)(DEFAULT_TX_INFO);
+        tx_info.data = '0x' + contracts.c1[field];
 
-it.skip('test c9 calls', async function () {
-    const runtime = await ewasmjsvm.deploy(contracts.c9.bin, c9Abi)(DEFAULT_TX_INFO);
-    deployments.c9 = runtime;
+        let { addr } = await runtime.mainRaw(tx_info);
+        addr = addr.toLowerCase();
 
-    const runtime_ = await ewasmjsvm.deploy(contracts.c9_.bin, c9_Abi)(DEFAULT_TX_INFO);
-    deployments.c9_ = runtime_;
+        const createdContract = jsvm.getPersistence().get(addr);
+        expect(createdContract.balance.toString()).toBe(tx_info.value.toString());
+        expect(createdContract.runtimeCode).not.toBeNull();
 
-    const answ = await runtime.main(deployments.c9_.address, deployments.c2.address, DEFAULT_TX_INFO);
-    expect(answ[0]).toBe('0x00000000000000000000000000000000000000000000000000000000000f424900000000000000000000000000000000000000000000000000000000000f4249');
-});
+        const cinstance = await jsvm.runtimeSim(createdContract.runtimeCode, [contracts.c2.abi[1]])
+        const answ = await cinstance.main(DEFAULT_TX_INFO);
+        expect(answ.val._hex).toBe('0xeeeeeeeeeeeeee');
+    });
 
-it('test c10', async function () {
-    const runtime = await ewasmjsvm.deploy(contracts.c10.bin, c10Abi)(DEFAULT_TX_INFO);
-    deployments.c10 = runtime;
+    it('test c8 selfDestruct', async function () {
+        const tx_info = {...DEFAULT_TX_INFO, value: 800000};
+        let fromBalance = jsvm.getPersistence().get(tx_info.from).balance;
 
-    let answ = await runtime.sum(8, 2, DEFAULT_TX_INFO);
-    expect(answ.c.toNumber()).toBe(10);
+        const runtime = await jsvm.deploy(contracts.c8[field], contracts.c8.abi)(tx_info);
+        deployments.c8 = runtime;
 
-    answ = await runtime.testAddress(runtime.address, DEFAULT_TX_INFO);
-    expect(answ[0].toLowerCase()).toBe(runtime.address);
+        fromBalance = fromBalance.sub(toBN(tx_info.value));
+        expect(jsvm.getPersistence().get(tx_info.from).balance.toString()).toBe(fromBalance.toString());
+        expect(jsvm.getPersistence().get(runtime.address).balance.toString()).toBe(tx_info.value.toString());
+        expect(uint8ArrayToHex(jsvm.getPersistence().get(runtime.address).runtimeCode)).toBe(uint8ArrayToHex(runtime.bin));
 
-    let value = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
-    expect(value).toBe(5);
+        await runtime.main(DEFAULT_TX_INFO);
 
-    let balance = ewasmjsvm.getPersistence().get(runtime.address).balance.toNumber();
+        fromBalance = fromBalance.add(toBN(tx_info.value));
+        expect(jsvm.getPersistence().get(tx_info.from).balance.toString()).toBe(fromBalance.toString());
+        expect(jsvm.getPersistence().get(runtime.address).balance.toString()).toBe('0');
+        expect(jsvm.getPersistence().get(runtime.address).runtimeCode).toBeUndefined();
+    });
 
-    const newvalue = await runtime.addvalue(10, {...DEFAULT_TX_INFO, value: 40});
-    value += 50;
-    expect(newvalue[0].toNumber()).toBe(value);
+    it.skip('test c9 calls', async function () {
+        const runtime = await jsvm.deploy(contracts.c9[field], contracts.c9.abi)(DEFAULT_TX_INFO);
+        deployments.c9 = runtime;
 
-    const val = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
-    expect(val).toBe(value);
+        const runtime_ = await jsvm.deploy(contracts.c9_[field], contracts.c9_.abi)(DEFAULT_TX_INFO);
+        deployments.c9_ = runtime_;
 
-    const newbalance = ewasmjsvm.getPersistence().get(runtime.address).balance.toNumber();
-    balance += 40;
-    expect(newbalance).toBe(balance);
-});
+        const answ = await runtime.main(deployments.c9_.address, deployments.c2.address, DEFAULT_TX_INFO);
+        expect(answ[0]).toBe('0x00000000000000000000000000000000000000000000000000000000000f424900000000000000000000000000000000000000000000000000000000000f4249');
+    });
 
-it('test c10 - calls solidity', async function () {
-    const runtime = await ewasmjsvm.deploy(contracts.c10.bin, c10Abi)(DEFAULT_TX_INFO);
-    deployments.c10 = runtime;
+    it('test c10', async function () {
+        const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(DEFAULT_TX_INFO);
+        deployments.c10 = runtime;
 
-    const _runtime = await ewasmjsvm.deploy(contracts.c12.bin, c12Abi)(DEFAULT_TX_INFO);
+        let answ = await runtime.sum(8, 2, DEFAULT_TX_INFO);
+        expect(answ.c.toNumber()).toBe(10);
 
-    let value = (await deployments.c10.value(DEFAULT_TX_INFO))[0].toNumber();
-    let balance = ewasmjsvm.getPersistence().get(deployments.c10.address).balance.toNumber();
+        answ = await runtime.testAddress(runtime.address, DEFAULT_TX_INFO);
+        expect(answ[0].toLowerCase()).toBe(runtime.address);
 
-    answ = await _runtime.test_staticcall(deployments.c10.address, 8, 2, DEFAULT_TX_INFO);
-    expect(answ.c.toNumber()).toBe(10);
+        let value = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
+        expect(value).toBe(5);
 
-    answ = await _runtime.test_staticcall_address(deployments.c10.address, deployments.c10.address, DEFAULT_TX_INFO);
-    expect(answ.c.toHexString()).toBe(deployments.c10.address);
+        let balance = jsvm.getPersistence().get(runtime.address).balance.toNumber();
 
-    await _runtime.test_call(deployments.c10.address, 10, {...DEFAULT_TX_INFO, value: 40});
-    const val2 = (await deployments.c10.value({...DEFAULT_TX_INFO}))[0].toNumber();
-    // expect(val2).toBe(value + 10 + 40);
+        const newvalue = await runtime.addvalue(10, {...DEFAULT_TX_INFO, value: 40});
+        value += 50;
+        expect(newvalue[0].toNumber()).toBe(value);
 
-    // const newbalance2 = ewasmjsvm.getPersistence().get(deployments.c10.address).balance.toNumber();
-    // expect(newbalance2).toBe(balance + 40);
-});
+        const val = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
+        expect(val).toBe(value);
 
-it.skip('test c10 revert', async function () {
-    const runtime = await ewasmjsvm.deploy(contracts.c10.bin, c10Abi)({...DEFAULT_TX_INFO});
-    let value = (await runtime.value({...DEFAULT_TX_INFO}))[0].toNumber();
-    let balance = ewasmjsvm.getPersistence().get(runtime.address).balance.toNumber();
+        const newbalance = jsvm.getPersistence().get(runtime.address).balance.toNumber();
+        balance += 40;
+        expect(newbalance).toBe(balance);
+    });
 
-    await expect(runtime._revert({...DEFAULT_TX_INFO, value: 40})).rejects.toThrow();
+    it('test c10 - calls solidity', async function () {
+        const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(DEFAULT_TX_INFO);
+        deployments.c10 = runtime;
 
-    const val = (await runtime.value({...DEFAULT_TX_INFO}))[0].toNumber();
-    expect(val).toBe(value);
+        const _runtime = await jsvm.deploy(contracts.c12[field], contracts.c12.abi)(DEFAULT_TX_INFO);
 
-    const newbalance = ewasmjsvm.getPersistence().get(runtime.address).balance.toNumber();
-    expect(newbalance).toBe(balance);
+        let value = (await deployments.c10.value({...DEFAULT_TX_INFO}))[0].toNumber();
+        let balance = jsvm.getPersistence().get(deployments.c10.address).balance.toNumber();
+
+        answ = await _runtime.test_staticcall(deployments.c10.address, 8, 2, DEFAULT_TX_INFO);
+        expect(answ.c.toNumber()).toBe(10);
+        expect(jsvm.getPersistence().get(deployments.c10.address).balance.toNumber()).toBe(balance);
+
+        answ = await _runtime.test_staticcall_address(deployments.c10.address, deployments.c10.address, DEFAULT_TX_INFO);
+        expect(answ.c.toHexString()).toBe(deployments.c10.address);
+        expect(jsvm.getPersistence().get(deployments.c10.address).balance.toNumber()).toBe(balance);
+
+        await _runtime.test_call(deployments.c10.address, 10, {...DEFAULT_TX_INFO, value: 40});
+        const val2 = (await deployments.c10.value({...DEFAULT_TX_INFO}))[0].toNumber();
+        expect(val2).toBe(value + 10 + 40);
+        // expect(jsvm.getPersistence().get(runtime.address).balance.toNumber()).toBe(balance + 40);
+        // expect(jsvm.getPersistence().get(_runtime.address).balance.toNumber()).toBe(0);
+    });
+
+    it('test c10 revert', async function () {
+        const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)({...DEFAULT_TX_INFO});
+        let value = (await runtime.value({...DEFAULT_TX_INFO}))[0].toNumber();
+        let balance = jsvm.getPersistence().get(runtime.address).balance.toNumber();
+
+        await expect(runtime._revert({...DEFAULT_TX_INFO, value: 40})).rejects.toThrow();
+
+        const val = (await runtime.value({...DEFAULT_TX_INFO}))[0].toNumber();
+        expect(val).toBe(value);
+
+        const newbalance = jsvm.getPersistence().get(runtime.address).balance.toNumber();
+        expect(newbalance).toBe(balance);
+    });
+
+    it('test c11', async function () {
+        const runtime = await jsvm.deploy(contracts.c11[field], contracts.c2.abi)(DEFAULT_TX_INFO);
+        let answ = await runtime.main( DEFAULT_TX_INFO);
+        expect(answ.val.toNumber()).toBe(11);
+    });
+
 });
 
 it.skip('test taylor', async function () {
@@ -490,49 +349,3 @@ it.skip('test taylor', async function () {
     // console.log(answ)
     // expect(answ.result).toBe('0xee000001000000081100000400000000');
 });
-
-it('test c11', async function () {
-    const runtime = await ewasmjsvm.deploy(contracts.c11.bin, c2Abi)(DEFAULT_TX_INFO);
-    let answ = await runtime.main( DEFAULT_TX_INFO);
-    expect(answ.val.toNumber()).toBe(11);
-});
-
-const postIndex = (str, marker) => {
-    const index = str.indexOf(marker);
-    return {
-        pre: index - 1,
-        post: index + marker.length + 1,
-    }
-}
-
-function parseCompilerOutput(str) {
-    const bin = str.match(/Binary representation:\n(.*)\n/)[1];
-    const watm = str.match(/Text representation:\n((.*\n*)*)/);
-    const wat = watm[1];
-
-    const prettyIndex = postIndex(str, 'Pretty printed source:');
-    const yulWasmIndex = postIndex(str, 'Translated source:');
-    const binaryIndex = postIndex(str, 'Binary representation:');
-
-    const optimized = str.substring(prettyIndex.post, yulWasmIndex.pre);
-    const yul_wasm = str.substring(yulWasmIndex.post, binaryIndex.pre);
-    return {optimized, yul_wasm, bin, wat};
-}
-
-async function createBuild(name, { bin, optimized, yul_wasm, wat}) {
-    const basePath = B_PATH + '/' + name + '_';
-
-    await promisify(fs.writeFile, basePath + 'bin', bin).catch(console.log);
-    await promisify(fs.writeFile, basePath + 'wat.wat', wat).catch(console.log);
-    await promisify(fs.writeFile, basePath + 'wasm.yul', yul_wasm).catch(console.log);
-    await promisify(fs.writeFile, basePath + 'opt.yul', optimized).catch(console.log);
-}
-
-function promisify(func, ...args) {
-    return new Promise((resolve, reject) => {
-        func(...args, (error, result) => {
-            if (error) reject(error);
-            resolve(result);
-        })
-    });
-}

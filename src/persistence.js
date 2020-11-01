@@ -6,7 +6,7 @@ const persistenceMock = (accounts = {}) => {
     // runtimeCode null - address not set / selfdestructed
     // runtimeCode.length === 0 - address set, not contract
 
-    const get = address => accounts[address] || {...emptyAccount(address), empty: true }
+    const get = address => cloneContract(accounts[address] || {...emptyAccount(address), empty: true });
 
     const set = ({ address, runtimeCode, storage, balance = 0, removed }) => {
         // pathToWasm ?
@@ -41,7 +41,7 @@ const persistenceMock = (accounts = {}) => {
 
     const setBulk = (accounts = {}) => {
         Object.keys(accounts).forEach(addr => {
-            set(accounts[addr]);
+            set(cloneContract(accounts[addr]));
         })
     }
 
