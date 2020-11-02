@@ -72,7 +72,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
 
         let gas = {
             limit: toBN(txObj.gasLimit || 4000000),
-            price: txObj.gasPrice || toBN(1),
+            price: toBN(txObj.gasPrice || 1),
             used: toBN(0),
         }
         const getGas = () => gas;
@@ -411,7 +411,6 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     Logger.get('jsvm').get('callStatic').debug(address, dataOffset, dataLength);
 
                     const data = loadMemory(dataOffset, dataLength);
-
                     const cache = getCache();
                     const currentData = {
                         gasLimit: gas_limit_i64,

@@ -89,7 +89,7 @@ const contexthandler = (msg, txobj={}) => {
     return msg + ' ' + printval(printobj);
 }
 
-const Logger = logg('', LEVELS.SILENT, null, [], []);
+const Logger = logg('', LEVELS.DEBUG, null, [], []);
 Logger.spawn('jsvm');
 Logger.spawn('ewasmjsvm');
 Logger.spawn('evmjs');

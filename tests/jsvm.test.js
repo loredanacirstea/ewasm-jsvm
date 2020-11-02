@@ -69,21 +69,21 @@ describe.each([
         return;
     }, 20000);
 
-    it('test c1', async function () {
+    it('test c1 - simple fallback, just constructor', async function () {
         const runtime = await jsvm.runtimeSim(contracts.c1[field], contracts.c1.abi);
         deployments.c1 = runtime;
         const answ = await runtime.main({...DEFAULT_TX_INFO});
         expect(answ.val._hex).toBe('0xeeeeeeeeeeeeee');
     });
 
-    it('test c2', async function () {
+    it('test c2, simple fallback with constructor', async function () {
         const runtime = await jsvm.deploy(contracts.c2[field], contracts.c2.abi)({...DEFAULT_TX_INFO});
         deployments.c2 = runtime;
         const answ = await runtime.main({...DEFAULT_TX_INFO});
         expect(answ.val.toNumber()).toBe(999999);
     });
 
-    it('test c3 multi', async function () {
+    it('test c3 multiple opcodes', async function () {
         const tx_info = {...DEFAULT_TX_INFO, value: 1400};
         let fromBalance = jsvm.getPersistence().get(tx_info.from).balance;
         const runtime = await jsvm.deploy(contracts.c3[field], contracts.c3.abi)(tx_info);
@@ -223,7 +223,8 @@ describe.each([
         expect(jsvm.getPersistence().get(runtime.address).runtimeCode).toBeUndefined();
     });
 
-    it.skip('test c9 calls', async function () {
+    const itnested = name === 'evmjs' ? it : it.skip;
+    itnested('test c9 calls', async function () {
         const runtime = await jsvm.deploy(contracts.c9[field], contracts.c9.abi)(DEFAULT_TX_INFO);
         deployments.c9 = runtime;
 
@@ -234,7 +235,7 @@ describe.each([
         expect(answ[0]).toBe('0x00000000000000000000000000000000000000000000000000000000000f424900000000000000000000000000000000000000000000000000000000000f4249');
     });
 
-    it('test c10', async function () {
+    it('test c10 - simple functions', async function () {
         const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(DEFAULT_TX_INFO);
         deployments.c10 = runtime;
 
@@ -261,7 +262,7 @@ describe.each([
         expect(newbalance).toBe(balance);
     }, 5000);
 
-    it('test c10 - calls solidity', async function () {
+    it('test c10 - callStatic, call', async function () {
         const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(DEFAULT_TX_INFO);
         deployments.c10 = runtime;
 
@@ -275,7 +276,7 @@ describe.each([
         expect(jsvm.getPersistence().get(deployments.c10.address).balance.toNumber()).toBe(balance);
 
         answ = await _runtime.test_staticcall_address(deployments.c10.address, deployments.c10.address, DEFAULT_TX_INFO);
-        expect(answ.c.toHexString()).toBe(deployments.c10.address);
+        expect(eBN2addr(answ.c)).toBe(deployments.c10.address);
         expect(jsvm.getPersistence().get(deployments.c10.address).balance.toNumber()).toBe(balance);
 
         await _runtime.test_call(deployments.c10.address, 10, {...DEFAULT_TX_INFO, value: 40});
@@ -299,7 +300,7 @@ describe.each([
         expect(newbalance).toBe(balance);
     });
 
-    it('test c11', async function () {
+    it('test c11 - for loop', async function () {
         const runtime = await jsvm.deploy(contracts.c11[field], contracts.c2.abi)(DEFAULT_TX_INFO);
         let answ = await runtime.main( DEFAULT_TX_INFO);
         expect(answ.val.toNumber()).toBe(11);
@@ -344,3 +345,7 @@ it.skip('test taylor', async function () {
     // console.log(answ)
     // expect(answ.result).toBe('0xee000001000000081100000400000000');
 });
+
+function eBN2addr (n) {
+    return '0x' + strip0x(n.toHexString()).padLeft(40, '0');
+}
