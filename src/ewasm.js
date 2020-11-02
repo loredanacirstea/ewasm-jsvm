@@ -1,6 +1,5 @@
 const BN = require('bn.js');
 const {
-    uint8ArrayToHex,
     newi32,
     instantiateWasm,
     toBN,

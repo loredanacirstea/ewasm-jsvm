@@ -3,10 +3,7 @@ const {
     hexToUint8Array,
     toBN,
     BN2uint8arr,
-    uint8ArrayToHex,
 }  = require('./utils.js');
-const {ERROR} = require('./constants');
-const evmasm = require('evmasm');
 
 const initializeImports = (
     vmcore,

@@ -7,7 +7,6 @@ const {
     decode,
     uint8ArrayToHex,
     hexToUint8Array,
-    newi64,
     randomAddress,
     extractAddress,
     BN2uint8arr,

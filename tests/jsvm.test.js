@@ -2,7 +2,7 @@ const { ethers } = require('ethers');
 const { compileContracts } = require('./setup/setup');
 const { ewasmjsvm: _ewasmjsvm, evmjs: _evmjs } = require('../src/index.js');
 const utils = require('../src/utils.js');
-const { uint8ArrayToHex, hexToUint8Array } = require('../src/utils.js');
+const { uint8ArrayToHex, strip0x } = require('../src/utils.js');
 const {Logger} = require('../src/config');
 
 const ewasmjsvm = _ewasmjsvm();
@@ -347,5 +347,5 @@ it.skip('test taylor', async function () {
 });
 
 function eBN2addr (n) {
-    return '0x' + strip0x(n.toHexString()).padLeft(40, '0');
+    return '0x' + strip0x(n.toHexString()).padStart(40, '0');
 }
