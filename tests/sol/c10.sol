@@ -16,7 +16,8 @@ contract c10 {
         return value;
     }
 
-    function addvalue_revert(uint256 _value) public payable returns (uint256) {
-        // revert();
+    function _revert() public payable returns (uint256) {
+        value = value + 10;
+        revert();
     }
 }

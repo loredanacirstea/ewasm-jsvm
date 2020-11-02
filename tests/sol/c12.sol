@@ -24,7 +24,7 @@ contract c12 {
     }
 
     function test_call(address externalc, uint256 a) payable public returns (uint256 result) {
-        (bool success, bytes memory data) = externalc.call(abi.encodeWithSignature("addvalue(uint256)", a));
+        (bool success, bytes memory data) = externalc.call{value: msg.value}(abi.encodeWithSignature("addvalue(uint256)", a));
         require(success);
         assembly {
             result := mload(add(data, 32))

@@ -1,23 +1,21 @@
 const { ERROR } = require('./constants');
-const Logger = require('./config');
 const {
-    persistence: initPersistence,
-    blocks: initBlocks,
-    logs: initLogs,
     cloneContext,
     cloneLogs,
+    cloneStorage,
+    cloneContract,
 } = require('./persistence.js');
 const {
     uint8ArrayToHex,
     hexToUint8Array,
-    newi32,
-    newi64,
     extractAddress,
     toBN,
 }  = require('./utils.js');
 
-function jsvm() {
+// Uint8Array:
+// address, value, storage key
 
+function jsvm(initPersistence, initBlocks, initLogs, Logger) {
     const persistence = initPersistence();
     const blocks = initBlocks();
     const chainlogs = initLogs();
@@ -26,9 +24,10 @@ function jsvm() {
         Logger.get('jsvm').get('transferValue').debug(from, to, value, typeof value);
         const parsedValue = toBN(value);
         const fromBalance = persistenceApi.get(from).balance;
+        const toBalance = persistenceApi.get(to).balance;
+        Logger.get('jsvm').get('transferValue').debug('---', fromBalance.toString(), toBalance.toString(), parsedValue.toString());
         if (fromBalance.lt(parsedValue)) throw new Error('Not enough balance.');
 
-        const toBalance = persistenceApi.get(to).balance;
         persistenceApi.updateBalance(to, toBalance.add(parsedValue));
         persistenceApi.updateBalance(from, fromBalance.sub(parsedValue));
     }
@@ -43,7 +42,7 @@ function jsvm() {
         const persistenceWrap = initPersistence(cache.context);
         Logger.get('jsvm').get('persistenceWrap').debug(Object.keys(cache.context));
         persistenceWrap._get = persistenceWrap.get;
-        persistenceWrap.get = (account) => {
+        persistenceWrap.get = function (account) {
             if (!account) throw new Error('Account not provided');
             const result = persistenceWrap._get(account);
             // if result is not cached
@@ -52,6 +51,13 @@ function jsvm() {
                 asyncResourceWrap(account);
                 // execution stops here
                 throw new Error(ERROR.ASYNC_RESOURCE);
+            }
+            result.getStorage = (key) => {
+                return result.storage[key];
+            }
+            result.setStorage = (key, value) => {
+                result.storage[key] = value;
+                persistenceWrap.set(result);
             }
             return result;
         }
@@ -65,13 +71,13 @@ function jsvm() {
         let lastReturnData;
 
         let gas = {
-            limit: newi64(txObj.gasLimit || 4000000),
-            price: txObj.gasPrice || 1,
-            used: newi64(0),
+            limit: toBN(txObj.gasLimit || 4000000),
+            price: toBN(txObj.gasPrice || 1),
+            used: toBN(0),
         }
         const getGas = () => gas;
         const useGas = gas => {
-            gas.used += gas;
+            gas.used = gas.used.add(gas);
         }
         txInfo.gas = gas;
 
@@ -141,11 +147,13 @@ function jsvm() {
         }
         const storageStore = (key, value) => {
             Logger.get('jsvm').get('storage').debug('store', key, value);
-            storageMap()[uint8ArrayToHex(key)] = value;
+            key = uint8ArrayToHex(key);
+            getInstance().setStorage(key, value);
         }
         const storageLoad = (key) => {
             Logger.get('jsvm').get('storage').debug('load', key);
-            return storageMap()[uint8ArrayToHex(key)] || hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
+            key = uint8ArrayToHex(key);
+            return getInstance().getStorage(key) || hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
         }
 
         const vmapi = {
@@ -153,17 +161,17 @@ function jsvm() {
             // 33 methods
                 storeMemory: function (bytes, offset) {
                     Logger.get('jsvm').get('memory').debug('store', bytes, offset);
-                    storeMemory(bytes, offset, 32);
+                    storeMemory(bytes, offset.toNumber(), 32);
                 },
                 storeMemory8: function (bytes, offset) {
-                    storeMemory(bytes, offset, 1);
+                    storeMemory(bytes, offset.toNumber(), 1);
                 },
                 loadMemory: function (offset) {
                     Logger.get('jsvm').get('memory').debug('load', offset);
-                    return loadMemory(offset, 32);
+                    return loadMemory(offset.toNumber(), 32);
                 },
-                useGas: function (amount_i64) {
-                    useGas(amount_i64);
+                useGas: function (amount) {
+                    useGas(amount);
                 },
                 getAddress: function () {
                     const size = 32;
@@ -188,44 +196,60 @@ function jsvm() {
                     return balance;
                 },
                 getBlockHash: function (number) {
+                    // TODO proper blockchash
                     return hexToUint8Array(block.hash);
                 },
-                callDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
+                callDataCopy: function (resultOffset, dataOffset, length) {
+                    resultOffset = resultOffset.toNumber();
+                    dataOffset = dataOffset.toNumber();
+                    const data = txObj.data.slice(dataOffset, dataOffset + length)
                     storeMemory(
-                        txObj.data.slice(dataOffset_i32, dataOffset_i32 + length_i32),
-                        resultOffset_i32ptr_bytes,
-                        length_i32,
+                        data,
+                        resultOffset,
+                        length,
                     );
+                    return data;
                 },
                 // returns i32
                 getCallDataSize: function () {
-                    return newi32(txObj.data.length);
+                    return toBN(txObj.data.length);
                 },
                 callDataLoad: function(dataOffset) {
-                    return txObj.data.slice(dataOffset, dataOffset + 32);
+                    dataOffset = dataOffset.toNumber();
+                    const data = txObj.data.slice(dataOffset, dataOffset + 32);
+                    const endfill = [...new Array(32 - data.length).keys()].map(v => 0);
+                    return new Uint8Array([...data].concat(endfill));
                 },
                 // result i32 Returns 0 on success, 1 on failure and 2 on revert
                 call: function (
                     gas_limit_i64,
-                    address, // the memory offset to load the address from (address)
-                    valueOffset_i32ptr_u128,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
-                    outputOffset_i32ptr_bytes,
-                    outputLength_i32,
+                    address,
+                    value,
+                    dataOffset,
+                    dataLength,
+                    outputOffset,
+                    outputLength,
                 ) {
-                    const value = loadMemory(valueOffset_i32ptr_u128, 32);
-                    const data = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                    dataOffset = dataOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+                    Logger.get('jsvm').get('call').debug(address, value,dataOffset, dataLength);
+
+                    const data = loadMemory(dataOffset, dataLength);
 
                     const cache = getCache();
                     const currentData = {
                         gasLimit: gas_limit_i64,
                         to: address,
+                        gasPrice: vmapi.getTxGasPrice(),
+                        from: vmapi.getAddress(),
+                        origin: vmapi.getTxOrigin(),
                         data,
                         value,
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
+                    Logger.get('jsvm').get('call').debug('cachedResult', cachedResult);
+
                     if (!cachedResult) {
                         const clonedContext = cloneContext(getCache().context);
                         const clonedLogs = cloneLogs(getCache().logs);
@@ -236,57 +260,170 @@ function jsvm() {
 
                     currentCacheIndex += 1;
 
-                    if (outputOffset_i32ptr_bytes && outputLength_i32) {
-                        storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+                    transferValue(
+                        extractAddress(currentData.origin),
+                        extractAddress(currentData.to),
+                        value,
+                    );
+
+                    if (outputOffset && outputLength) {
+                        outputOffset = outputOffset.toNumber();
+                        outputLength = outputLength.toNumber();
+                        storeMemory(cachedResult.result.data, outputOffset, outputLength);
                     }
                     setReturnData(cachedResult.result.data);
 
-                    return newi32(cachedResult.result.success);
+                    return toBN(cachedResult.result.success);
                 },
                 // result i32 Returns 0 on success, 1 on failure and 2 on revert
+                // uses the code from address
+                // context from current contract
                 callCode: function (
                     gas_limit_i64,
-                    addressOffset_i32ptr_address, // the memory offset to load the address from (address)
-                    valueOffset_i32ptr_u128,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
-                ) {
-                    throw new Error('callCode not implemented');
-                },
-                // result i32 Returns 0 on success, 1 on failure and 2 on revert
-                callDelegate: function (
-                    gas_limit_i64,
-                    addressOffset_i32ptr_address,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
-                ) {
-                    // identical to a message call except the code at the target address is executed in the context of the calling contract
-                    // msg.sender and msg.value do not change their values.
-                    throw new Error('callCode not implemented');
-                },
-                // result i32 Returns 0 on success, 1 on failure and 2 on revert
-                callStatic: function (
-                    gas_limit_i64,
                     address,
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
-                    outputOffset_i32ptr_bytes,
-                    outputLength_i32,
+                    value,
+                    dataOffset,
+                    dataLength,
+                    outputOffset,
+                    outputLength,
                 ) {
-                    Logger.get('jsvm').get('callStatic').debug(address, dataOffset_i32ptr_bytes, dataLength_i32);
+                    dataOffset = dataOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+                    Logger.get('jsvm').get('callCode').debug(gas_limit_i64, address, value, dataOffset, dataLength);
 
-                    const data = loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                    const data = loadMemory(dataOffset, dataLength);
+                    const hexaddress = extractAddress(address);
+                    const contract = persistence.get(hexaddress);
 
                     const cache = getCache();
                     const currentData = {
                         gasLimit: gas_limit_i64,
                         to: address,
+                        gasPrice: vmapi.getTxGasPrice(),
+                        from: vmapi.getAddress(),
+                        origin: vmapi.getTxOrigin(),
+                        data,
+                        value,
+                    }
+                    const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
+
+                    Logger.get('jsvm').get('callCode').debug('cachedResult', cachedResult);
+
+                    if (!cachedResult) {
+                        const clonedContext = cloneContext(getCache().context);
+                        const clonedLogs = cloneLogs(getCache().logs);
+
+                        // use current context for the contract
+                        clonedContext[hexaddress] = cloneContract(contract)
+                        clonedContext[hexaddress].storage = cloneStorage(storageMap());
+
+                        internalCallWrap(currentCacheIndex, currentData, clonedContext, clonedLogs);
+                        // execution stops here
+                        throw new Error(ERROR.ASYNC_CALL);
+                    }
+
+                    currentCacheIndex += 1;
+
+                    transferValue(
+                        extractAddress(currentData.from),  // from this contract
+                        extractAddress(currentData.to),
+                        value,
+                    );
+
+                    if (outputOffset && outputLength) {
+                        outputOffset = outputOffset.toNumber();
+                        outputLength = outputLength.toNumber();
+                        storeMemory(cachedResult.result.data, outputOffset, outputLength);
+                    }
+                    setReturnData(cachedResult.result.data);
+
+                    return toBN(cachedResult.result.success);
+                },
+                // result i32 Returns 0 on success, 1 on failure and 2 on revert
+                callDelegate: function (
+                    gas_limit_i64,
+                    address,
+                    dataOffset,
+                    dataLength,
+                    outputOffset,
+                    outputLength,
+                ) {
+                    dataOffset = dataOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+
+                    // identical to a message call except the code at the target address is executed in the context of the calling contract
+                    // msg.sender and msg.value do not change their values.
+                    Logger.get('jsvm').get('callDelegate').debug(gas_limit_i64, address, valueOffset_i32ptr_u128, dataOffset, dataLength);
+
+                    const data = loadMemory(dataOffset, dataLength);
+                    const hexaddress = extractAddress(address);
+                    const contract = persistence.get(hexaddress);
+
+                    const cache = getCache();
+                    const currentData = {
+                        gasLimit: gas_limit_i64,
+                        to: address,
+                        gasPrice: vmapi.getTxGasPrice(),
+                        from: txObj.from,
+                        origin: vmapi.getTxOrigin(),
+                        data,
+                        value: txObj.value,
+                    }
+                    const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
+
+                    Logger.get('jsvm').get('callDelegate').debug('cachedResult', cachedResult);
+
+                    if (!cachedResult) {
+                        const clonedContext = cloneContext(getCache().context);
+                        const clonedLogs = cloneLogs(getCache().logs);
+
+                        // use current context for the contract
+                        clonedContext[hexaddress] = cloneContract(contract)
+                        clonedContext[hexaddress].storage = cloneStorage(storageMap());
+
+                        internalCallWrap(currentCacheIndex, currentData, clonedContext, clonedLogs);
+                        // execution stops here
+                        throw new Error(ERROR.ASYNC_CALL);
+                    }
+
+                    currentCacheIndex += 1;
+
+                    if (outputOffset && outputLength) {
+                        outputOffset = outputOffset.toNumber();
+                        outputLength = outputLength.toNumber();
+                        storeMemory(cachedResult.result.data, outputOffset, outputLength);
+                    }
+                    setReturnData(cachedResult.result.data);
+
+                    return toBN(cachedResult.result.success);
+                },
+                // result i32 Returns 0 on success, 1 on failure and 2 on revert
+                callStatic: function (
+                    gas_limit_i64,
+                    address,
+                    dataOffset,
+                    dataLength,
+                    outputOffset,
+                    outputLength,
+                ) {
+                    dataOffset = dataOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+                    Logger.get('jsvm').get('callStatic').debug(address, dataOffset, dataLength);
+
+                    const data = loadMemory(dataOffset, dataLength);
+                    const cache = getCache();
+                    const currentData = {
+                        gasLimit: gas_limit_i64,
+                        gasPrice: vmapi.getTxGasPrice(),
+                        to: address,
+                        from: vmapi.getAddress(),
+                        origin: vmapi.getTxOrigin(),
                         data,
                         value: new Uint8Array(0),
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
-                    Logger.get('jsvm').get('cachedResult').debug(cachedResult);
+                    Logger.get('jsvm').get('callStatic').debug('cachedResult', cachedResult);
 
                     if (!cachedResult) {
                         const clonedContext = cloneContext(getCache().context);
@@ -298,12 +435,14 @@ function jsvm() {
 
                     currentCacheIndex += 1;
 
-                    if (outputOffset_i32ptr_bytes && outputLength_i32) {
-                        storeMemory(cachedResult.result.data, outputOffset_i32ptr_bytes, outputLength_i32);
+                    if (outputOffset && outputLength) {
+                        outputOffset = outputOffset.toNumber();
+                        outputLength = outputLength.toNumber();
+                        storeMemory(cachedResult.result.data, outputOffset, outputLength);
                     }
                     setReturnData(cachedResult.result.data);
 
-                    return newi32(cachedResult.result.success);
+                    return toBN(cachedResult.result.success);
                 },
                 storageStore: function (key_uint8array, value_uint8array) {
                     storageStore(key_uint8array, value_uint8array);
@@ -324,13 +463,18 @@ function jsvm() {
                     value.set(tightValue, size - tightValue.length);
                     return value;
                 },
-                codeCopy: function (resultOffset_i32ptr_bytes, codeOffset_i32, length_i32) {
-                    const runtime = getInstance().runtimeCode.slice(codeOffset_i32, codeOffset_i32 + length_i32)
-                    storeMemory(runtime, resultOffset_i32ptr_bytes, length_i32)
+                codeCopy: function (resultOffset, codeOffset, length) {
+                    resultOffset = resultOffset.toNumber();
+                    codeOffset = codeOffset.toNumber();
+                    length = length.toNumber();
+
+                    const runtime = getInstance().runtimeCode.slice(codeOffset, codeOffset + length)
+                    storeMemory(runtime, resultOffset, length)
+                    return runtime;
                 },
                 // returns i32 - code size current env
                 getCodeSize: function() {
-                    return newi32(getInstance().runtimeCode.length);
+                    return toBN(getInstance().runtimeCode.length);
                 },
                 // block’s beneficiary address
                 getBlockCoinbase: function() {
@@ -346,6 +490,9 @@ function jsvm() {
                     dataOffset,
                     dataLength,
                 ) {
+                    dataOffset = dataOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+
                     const runtimeCode = loadMemory(dataOffset, dataLength);
                     const address = persistence.set({ runtimeCode, balance: toBN(balance) });
                     Logger.get('jsvm').get('create').debug(address);
@@ -357,7 +504,7 @@ function jsvm() {
                     return addrBytes;
                 },
                 // returns u256
-                getBlockDifficulty: function (resulltOffset_i32ptr_u256) {
+                getBlockDifficulty: function () {
                     const size = 32;
                     const value = new Uint8Array(size);
                     const tightValue = hexToUint8Array(block.difficulty.toString(16));
@@ -366,29 +513,34 @@ function jsvm() {
                 },
                 externalCodeCopy: function (
                     address, // the memory offset to load the address from (address)
-                    resultOffset_i32ptr_bytes,
-                    codeOffset_i32,
-                    dataLength_i32,
+                    resultOffset,
+                    codeOffset,
+                    dataLength,
                 ) {
                     address = extractAddress(address);
+                    resultOffset = resultOffset.toNumber();
+                    codeOffset = codeOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+
                     Logger.get('jsvm').get('externalCodeCopy').debug(address);
-                    const codeSlice = persistence.get(address).runtimeCode.slice(codeOffset_i32, codeOffset_i32 + dataLength_i32);
-                    storeMemory(codeSlice, resultOffset_i32ptr_bytes, dataLength_i32);
+                    const codeSlice = persistence.get(address).runtimeCode.slice(codeOffset, codeOffset + dataLength);
+                    storeMemory(codeSlice, resultOffset, dataLength);
+                },
+                getExternalCodeHash: function(address) {
+                    throw new Error('Not implemented');
                 },
                 // Returns extCodeSize i32
                 getExternalCodeSize: function (address) {
                     address = extractAddress(address);
                     Logger.get('jsvm').get('getExternalCodeSize').debug(address);
-                    return newi32(persistence.get(address).runtimeCode.length);
+                    return toBN(persistence.get(address).runtimeCode.length);
                 },
-                // result gasLeft i64
                 getGasLeft: function () {
                     const gas = getGas();
-                    return newi64(gas.limit - gas.used);
+                    return gas.limit.sub(gas.used);
                 },
-                // result blockGasLimit i64
                 getBlockGasLimit: function () {
-                    return newi64(block.gasLimit);
+                    return getGas().limit;
                 },
                 getTxGasPrice: function () {
                     const size = 32;
@@ -398,22 +550,22 @@ function jsvm() {
                     return value;
                 },
                 log: function (
-                    dataOffset_i32ptr_bytes,
-                    dataLength_i32,
-                    numberOfTopics_i32,
+                    dataOffset,
+                    dataLength,
+                    numberOfTopics,
                     topics,
                 ) {
                     Logger.get('jsvm').get('log').debug(topics);
                     chainlogs.set({
                         address: vmapi.getAddress(),
                         blockNumber: block.number,
-                        data: loadMemory(dataOffset_i32ptr_bytes, dataLength_i32),
-                        topics: topics.slice(0, numberOfTopics_i32),
+                        data: loadMemory(dataOffset.toNumber(), dataLength.toNumber()),
+                        topics: topics.slice(0, numberOfTopics),
                     })
                 },
                 // result blockNumber i64
                 getBlockNumber: function () {
-                    return newi64(block.number);
+                    return toBN(block.number);
                 },
                 getTxOrigin: function () {
                     const size = 32;
@@ -421,21 +573,25 @@ function jsvm() {
                     address.set(hexToUint8Array(txObj.origin), size - 20);
                     return address;
                 },
-                finish: function (dataOffset_i32ptr_bytes, dataLength_i32) {
-                    return loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                finish: function (dataOffset, dataLength) {
+                    return loadMemory(dataOffset.toNumber(), dataLength.toNumber());
                 },
-                revert: function (dataOffset_i32ptr_bytes, dataLength_i32) {
-                    return loadMemory(dataOffset_i32ptr_bytes, dataLength_i32);
+                revert: function (dataOffset, dataLength) {
+                    return loadMemory(dataOffset.toNumber(), dataLength.toNumber());
                 },
                 // result dataSize i32
                 getReturnDataSize: function () {
-                    return newi32(getReturnData().length);
+                    return toBN(getReturnData().length);
                 },
-                returnDataCopy: function (resultOffset_i32ptr_bytes, dataOffset_i32, length_i32) {
+                returnDataCopy: function (resultOffset, dataOffset, length) {
+                    resultOffset = resultOffset.toNumber();
+                    dataOffset = dataOffset.toNumber();
+                    length = length.toNumber();
+
                     storeMemory(
-                        getReturnData().slice(dataOffset_i32, dataOffset_i32 + length_i32),
-                        resultOffset_i32ptr_bytes,
-                        length_i32,
+                        getReturnData().slice(dataOffset, dataOffset + length),
+                        resultOffset,
+                        length,
                     );
                 },
                 selfDestruct: function (address) {
@@ -451,10 +607,10 @@ function jsvm() {
                 },
                 // result blockTimestamp i64,
                 getBlockTimestamp: function () {
-                    return newi64(block.timestamp);
+                    return toBN(block.timestamp);
                 },
                 getBlockChainId: function () {
-                    return newi32(99);
+                    return toBN(99);
                 },
                 getMSize: function () {
                     return (new Uint8Array(getMemory().buffer)).length;
@@ -467,12 +623,13 @@ function jsvm() {
         return vmapi;
     }
 
-    return {
-        persistence,
+    const wrappersist = {
+        accounts: persistence,
         blocks,
         logs: chainlogs,
-        call,
     }
+
+    return { persistence: wrappersist, call }
 
 }
 
