@@ -216,7 +216,9 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 },
                 callDataLoad: function(dataOffset) {
                     dataOffset = dataOffset.toNumber();
-                    return txObj.data.slice(dataOffset, dataOffset + 32);
+                    const data = txObj.data.slice(dataOffset, dataOffset + 32);
+                    const endfill = [...new Array(32 - data.length).keys()].map(v => 0);
+                    return new Uint8Array([...data].concat(endfill));
                 },
                 // result i32 Returns 0 on success, 1 on failure and 2 on revert
                 call: function (

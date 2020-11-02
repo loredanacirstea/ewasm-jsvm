@@ -24,7 +24,7 @@ object "TestWasm3" {
             let account := mload(add(_calldata, 32))
             mstore(slotPtr(data_ptr, 2), balance(account))
 
-            log0(slotPtr(data_ptr, 2), 32)
+            // log0(slotPtr(data_ptr, 2), 32)
 
             // getCallValue i32
             mstore(slotPtr(data_ptr, 3), callvalue())
@@ -43,10 +43,10 @@ object "TestWasm3" {
             // storageLoad
             mstore(slotPtr(data_ptr, 7), sload(0))
 
-             // getGasLeft i64
+            // getGasLeft i64
             mstore(slotPtr(data_ptr, 8), gas())
 
-            log2(slotPtr(data_ptr, 8), 32, 55555554, 55555553)
+            // log2(slotPtr(data_ptr, 8), 32, 55555554, 55555553)
 
             // getBlockHash
             mstore(slotPtr(data_ptr, 9), blockhash(2))
@@ -69,17 +69,16 @@ object "TestWasm3" {
             // getCodeSize
             mstore(slotPtr(data_ptr, 15), codesize())
 
-            log3(slotPtr(data_ptr, 15), 32, 55555552, 55555551, 55555550)
+            // log3(slotPtr(data_ptr, 15), 32, 55555552, 55555551, 55555550)
 
             let addr2 := mload(_calldata)
-
             mstore(slotPtr(data_ptr, 16), addr2)
 
             // getExternalCodeSize i32
             mstore(slotPtr(data_ptr, 17), extcodesize(addr2))
 
             // externalCodeCopy
-            extcodecopy(addr2, slotPtr(data_ptr, 18), 32, 32)
+            extcodecopy(addr2, slotPtr(data_ptr, 18), 0, 32)
 
             return (data_ptr, slotOffset(19))
 

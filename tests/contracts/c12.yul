@@ -6,23 +6,23 @@
  *******************************************************/
 
 
-object "c12_89" {
+object "c12_92" {
     code {
         mstore(64, memoryguard(128))
         if callvalue() { revert(0, 0) }
 
-        constructor_c12_89()
+        constructor_c12_92()
 
-        codecopy(0, dataoffset("c12_89_deployed"), datasize("c12_89_deployed"))
+        codecopy(0, dataoffset("c12_92_deployed"), datasize("c12_92_deployed"))
 
-        return(0, datasize("c12_89_deployed"))
+        return(0, datasize("c12_92_deployed"))
 
-        function constructor_c12_89() {
+        function constructor_c12_92() {
 
         }
 
     }
-    object "c12_89_deployed" {
+    object "c12_92_deployed" {
         code {
             mstore(64, 128)
 
@@ -36,7 +36,7 @@ object "c12_89" {
                     // test_call(address,uint256)
 
                     let param_0, param_1 :=  abi_decode_tuple_t_addresst_uint256(4, calldatasize())
-                    let ret_0 :=  fun_test_call_88(param_0, param_1)
+                    let ret_0 :=  fun_test_call_91(param_0, param_1)
                     let memPos := allocateMemory(0)
                     let memEnd := abi_encode_tuple_t_uint256__to_t_uint256__fromStack(memPos , ret_0)
                     return(memPos, sub(memEnd, memPos))
@@ -203,38 +203,41 @@ object "c12_89" {
 
             }
 
-            function fun_test_call_88(vloc_externalc_62, vloc_a_64) -> vloc_result_67 {
+            function fun_test_call_91(vloc_externalc_62, vloc_a_64) -> vloc_result_67 {
                 let zero_value_for_type_t_uint256_18 := zero_value_for_split_t_uint256()
                 vloc_result_67 := zero_value_for_type_t_uint256_18
 
                 let _19 := vloc_externalc_62
                 let expr_73 := _19
                 let expr_74_address := expr_73
+                let expr_76 := callvalue()
+                let expr_77_address := expr_74_address
+                let expr_77_value := expr_76
                 let _20 := vloc_a_64
-                let expr_78 := _20
+                let expr_81 := _20
 
-                let expr_79_mpos := allocateTemporaryMemory()
-                let _21 := add(expr_79_mpos, 0x20)
+                let expr_82_mpos := allocateTemporaryMemory()
+                let _21 := add(expr_82_mpos, 0x20)
 
                 mstore(_21, 0x66d29e6e00000000000000000000000000000000000000000000000000000000)
                 _21 := add(_21, 4)
 
-                let _22 := abi_encode_tuple_t_uint256__to_t_uint256__fromStack(_21, expr_78)
-                mstore(expr_79_mpos, sub(_22, add(expr_79_mpos, 0x20)))
+                let _22 := abi_encode_tuple_t_uint256__to_t_uint256__fromStack(_21, expr_81)
+                mstore(expr_82_mpos, sub(_22, add(expr_82_mpos, 0x20)))
                 mstore(64, round_up_to_mul_of_32(_22))
 
-                let _23 := add(expr_79_mpos, 0x20)
-                let _24 := mload(expr_79_mpos)
+                let _23 := add(expr_82_mpos, 0x20)
+                let _24 := mload(expr_82_mpos)
 
-                let expr_80_component_1 := call(gas(), expr_74_address,  0,  _23, _24, 0, 0)
+                let expr_83_component_1 := call(gas(), expr_77_address,  expr_77_value,  _23, _24, 0, 0)
 
-                let expr_80_component_2_mpos := extract_returndata()
+                let expr_83_component_2_mpos := extract_returndata()
 
-                let vloc_success_70 := expr_80_component_1
-                let vloc_data_72_mpos := expr_80_component_2_mpos
+                let vloc_success_70 := expr_83_component_1
+                let vloc_data_72_mpos := expr_83_component_2_mpos
                 let _25 := vloc_success_70
-                let expr_83 := _25
-                require_helper(expr_83)
+                let expr_86 := _25
+                require_helper(expr_86)
                 {
                     vloc_result_67 := mload(add(vloc_data_72_mpos, 32))
                 }

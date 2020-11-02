@@ -3,6 +3,7 @@ const {
     hexToUint8Array,
     toBN,
     BN2uint8arr,
+    uint8ArrayToHex,
 }  = require('./utils.js');
 const {ERROR} = require('./constants');
 const evmasm = require('evmasm');
@@ -22,40 +23,47 @@ const initializeImports = (
     const api = {ethereum: {}};
 
     api.ethereum = {
-        storeMemory: function (offset, bytes, stack) {
+        storeMemory: function (offset, bytes, {stack, position}) {
             jsvm_env.storeMemory(BN2uint8arr(bytes), offset);
             logger.debug('MSTORE', [bytes, offset], [], getCache(), getMemory(), stack);
+            return;
         },
-        storeMemory8: function (offset, bytes, stack) {
+        storeMemory8: function (offset, bytes, {stack, position}){
             jsvm_env.storeMemory8(BN2uint8arr(bytes), offset);
             logger.debug('MSTORE8', [bytes, offset], [], getCache(), getMemory(), stack);
+            return;
         },
-        loadMemory: function (offset, stack) {
-            const result = jsvm_env.loadMemory(offset);
+        loadMemory: function (offset, {stack, position}){
+            const result = toBN(jsvm_env.loadMemory(offset));
+            stack.push(result);
             logger.debug('MLOAD', [offset], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return {stack, position};
         },
-        useGas: function (amount, stack) {
+        useGas: function (amount, {stack}){
             jsvm_env.useGas(amount);
             logger.debug('USEGAS', [amount], [], getCache(), getMemory(), stack);
+            return;
         },
-        getAddress: function (stack) {
-            const address = jsvm_env.getAddress();
+        getAddress: function ({stack, position}) {
+            const address = toBN(jsvm_env.getAddress());
+            stack.push(address);
             logger.debug('ADDRESS', [], [address], getCache(), getMemory(), stack);
-            return toBN(address);
+            return {stack, position};
         },
         // result is u128
-        getExternalBalance: function (_address, stack) {
+        getExternalBalance: function (_address, {stack, position}){
             const address = BN2uint8arr(_address);
             const balance = toBN(jsvm_env.getExternalBalance(address));
+            stack.push(balance);
             logger.debug('BALANCE', [_address], [balance], getCache(), getMemory(), stack);
-            return balance;
+            return {stack, position};
         },
         // result i32 Returns 0 on success and 1 on failure
-        getBlockHash: function (number, stack) {
+        getBlockHash: function (number, {stack, position}){
             const hash = toBN(jsvm_env.getBlockHash(number));
+            stack.push(hash);
             logger.debug('BLOCKHASH', [number], [hash], getCache(), getMemory(), stack);
-            return hash;
+            return {stack, position};
         },
         // result i32 Returns 0 on success, 1 on failure and 2 on revert
         call: function (
@@ -66,9 +74,9 @@ const initializeImports = (
             dataLength,
             outputOffset,
             outputLength,
-            stack
+            {stack, position}
         ) {
-            const result = jsvm_env.call(
+            const result = toBN(jsvm_env.call(
                 gas_limit,
                 BN2uint8arr(address),
                 BN2uint8arr(value),
@@ -76,7 +84,8 @@ const initializeImports = (
                 dataLength,
                 outputOffset,
                 outputLength,
-            );
+            ));
+            stack.push(result);
             logger.debug('CALL', [gas_limit,
                 address,
                 value,
@@ -84,23 +93,24 @@ const initializeImports = (
                 dataLength,
                 outputOffset,
                 outputLength,], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return {stack, position};
         },
-        callDataCopy: function (resultOffset, dataOffset, length, stack) {
+        callDataCopy: function (resultOffset, dataOffset, length, {stack, position}){
             const result = jsvm_env.callDataCopy(resultOffset, dataOffset, length);
             logger.debug('CALLDATACOPY', [resultOffset, dataOffset, length], [result], getCache(), getMemory(), stack);
             return;
         },
-        // returns i32
-        getCallDataSize: function (stack) {
+        getCallDataSize: function ({stack, position}) {
             const result = toBN(jsvm_env.getCallDataSize());
+            stack.push(result);
             logger.debug('CALLDATASIZE', [], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        callDataLoad: function(dataOffset, stack) {
-            const result = jsvm_env.callDataLoad(dataOffset);
+        callDataLoad: function(dataOffset, {stack, position}) {
+            const result = toBN(jsvm_env.callDataLoad(dataOffset));
+            stack.push(result);
             logger.debug('CALLDATALOAD', [dataOffset], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return {stack, position};
         },
         // result i32 Returns 0 on success, 1 on failure and 2 on revert
         callCode: function (
@@ -111,9 +121,9 @@ const initializeImports = (
             dataLength,
             outputOffset,
             outputLength,
-            stack
+            {stack, position}
         ) {
-            const result = jsvm_env.callCode(
+            const result = toBN(jsvm_env.callCode(
                 gas_limit,
                 BN2uint8arr(address),
                 BN2uint8arr(value),
@@ -121,9 +131,10 @@ const initializeImports = (
                 dataLength,
                 outputOffset,
                 outputLength
-            );
+            ));
+            stack.push(result);
             logger.debug('CALLCODE', [gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
         // result i32 Returns 0 on success, 1 on failure and 2 on revert
         callDelegate: function (
@@ -133,26 +144,28 @@ const initializeImports = (
             dataLength,
             outputOffset,
             outputLength,
-            stack
+            {stack, position}
         ) {
-            const result = jsvm_env.callDelegate(
+            const result = toBN(jsvm_env.callDelegate(
                 gas_limit_i64,
                 BN2uint8arr(address),
                 dataOffset,
                 dataLength,
                 outputOffset,
                 outputLength
-            );
+            ));
+            stack.push(result);
             logger.debug('DELEGATECALL', [
                 gas_limit_i64,
                 address,
                 dataOffset,
                 dataLength,
                 outputOffset,
-                outputLength], [result], getCache(), getMemory(), stack);
-            return result;
+                outputLength], [result], getCache(), getMemory(), stack
+            );
+            return {stack, position};
         },
-        // result i32 Returns 0 on success, 1 on failure and 2 on revert
+        // result Returns 0 on success, 1 on failure and 2 on revert
         callStatic: function (
             gas_limit_i64,
             address,
@@ -160,17 +173,17 @@ const initializeImports = (
             dataLength,
             outputOffset,
             outputLength,
-            stack
+            {stack, position}
         ) {
-            const result = jsvm_env.callStatic(
+            const result = toBN(jsvm_env.callStatic(
                 gas_limit_i64,
                 BN2uint8arr(address),
                 dataOffset,
                 dataLength,
                 outputOffset,
                 outputLength
-            );
-
+            ));
+            stack.push(result);
             logger.debug('STATICCALL', [
                 gas_limit_i64,
                 address,
@@ -178,69 +191,76 @@ const initializeImports = (
                 dataLength,
                 outputOffset,
                 outputLength], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        storageStore: function (pathOffset, value, stack) {
+        storageStore: function (pathOffset, value, {stack, position}){
             jsvm_env.storageStore(BN2uint8arr(pathOffset), BN2uint8arr(value));
             logger.debug('SSTORE', [pathOffset, value], [], getCache(), getMemory(), stack);
+            return;
         },
-        storageLoad: function (pathOffset, stack) {
-            const value = jsvm_env.storageLoad(BN2uint8arr(pathOffset));
-            logger.debug('SLOAD', [pathOffset], [value], getCache(), getMemory(), stack);
-            return toBN(value);
+        storageLoad: function (pathOffset, {stack, position}){
+            const result = toBN(jsvm_env.storageLoad(BN2uint8arr(pathOffset)));
+            stack.push(result);
+            logger.debug('SLOAD', [pathOffset], [result], getCache(), getMemory(), stack);
+            return {stack, position};
         },
-        getCaller: function (stack) {
-            const address = jsvm_env.getCaller();
+        getCaller: function ({stack, position}) {
+            const address = toBN(jsvm_env.getCaller());
+            stack.push(address);
             logger.debug('CALLER', [], [address], getCache(), getMemory(), stack);
-            return toBN(address);
+            return {stack, position};
         },
-        getCallValue: function (stack) {
-            const value = jsvm_env.getCallValue();
+        getCallValue: function ({stack, position}) {
+            const value = toBN(jsvm_env.getCallValue());
+            stack.push(value);
             logger.debug('CALLVALUE', [], [value], getCache(), getMemory(), stack);
-            return toBN(value);
+            return {stack, position};
         },
-        codeCopy: function (resultOffset, codeOffset, length, stack) {
+        codeCopy: function (resultOffset, codeOffset, length, {stack, position}) {
             jsvm_env.codeCopy(resultOffset, codeOffset, length);
             logger.debug('CODECOPY', [resultOffset, codeOffset, length], [], getCache(), getMemory(), stack);
+            return;
         },
         // returns i32 - code size current env
-        getCodeSize: function(stack) {
-            const result = jsvm_env.getCodeSize();
+        getCodeSize: function({stack, position}) {
+            const result = toBN(jsvm_env.getCodeSize());
+            stack.push(result);
             logger.debug('CODESIZE', [], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return {stack, position};
         },
         // block’s beneficiary address
-        getBlockCoinbase: function(stack) {
-            const value = jsvm_env.getBlockCoinbase();
+        getBlockCoinbase: function({stack, position}) {
+            const value = toBN(jsvm_env.getBlockCoinbase());
+            stack.push(value);
             logger.debug('COINBASE', [], [value], getCache(), getMemory(), stack);
-            return toBN(value);
+            return {stack, position};
         },
         create: function (
             value,
             dataOffset,
             dataLength,
-            stack
+            {stack, position}
         ) {
-            const address = jsvm_env.create(value, dataOffset, dataLength);
-
+            const address = toBN(jsvm_env.create(value, dataOffset, dataLength));
+            stack.push(address);
             logger.debug('CREATE', [value,
                 dataOffset,
                 dataLength,
             ], [address], getCache(), getMemory(), stack);
-
-            return toBN(address);
+            return {stack, position};
         },
-        getBlockDifficulty: function (stack) {
-            const value = jsvm_env.getBlockDifficulty();
+        getBlockDifficulty: function ({stack, position}) {
+            const value = toBN(jsvm_env.getBlockDifficulty());
+            stack.push(value);
             logger.debug('DIFFICULTY', [], [value], getCache(), getMemory(), stack);
-            return toBN(value);
+            return {stack, position};
         },
         externalCodeCopy: function (
             address,
             resultOffset,
             codeOffset,
             dataLength,
-            stack
+            {stack, position}
         ) {
             jsvm_env.externalCodeCopy(
                 BN2uint8arr(address),
@@ -253,36 +273,41 @@ const initializeImports = (
                 codeOffset,
                 dataLength,
             ], [], getCache(), getMemory(), stack);
+            return;
         },
         // Returns extCodeSize i32
-        getExternalCodeSize: function (address, stack) {
-            const result = jsvm_env.getExternalCodeSize(BN2uint8arr(address));
+        getExternalCodeSize: function (address, {stack, position}){
+            const result = toBN(jsvm_env.getExternalCodeSize(BN2uint8arr(address)));
+            stack.push(result);
             logger.debug('EXTCODESIZE', [address], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return {stack, position};
         },
         // result gasLeft i64
-        getGasLeft: function (stack) {
-            const result = jsvm_env.getGasLeft();
+        getGasLeft: function ({stack, position}) {
+            const result = toBN(jsvm_env.getGasLeft());
+            stack.push(result);
             logger.debug('GAS', [], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return {stack, position};
         },
         // result blockGasLimit i64
-        getBlockGasLimit: function (stack) {
-            const result = jsvm_env.getBlockGasLimit();
+        getBlockGasLimit: function ({stack, position}) {
+            const result = toBN(jsvm_env.getBlockGasLimit());
+            stack.push(result);
             logger.debug('GASLIMIT', [], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return {stack, position};
         },
-        getTxGasPrice: function (stack) {
-            const result = jsvm_env.getTxGasPrice();
+        getTxGasPrice: function ({stack, position}) {
+            const result = toBN(jsvm_env.getTxGasPrice());
+            stack.push(result);
             logger.debug('GASPRICE', [], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return {stack, position};
         },
         log: function (
             dataOffset,
             dataLength,
             ...topics
         ) {
-            const stack = topics.pop();
+            const {stack, position} = topics.pop();
             const numberOfTopics = topics.length;
             jsvm_env.log(
                 dataOffset,
@@ -295,76 +320,86 @@ const initializeImports = (
                 numberOfTopics,
                 ...topics
             ], [], getCache(), getMemory(), stack);
+            return;
         },
         log0: function(dataOffset, dataLength, ...topics) {
-            api.ethereum.log(dataOffset, dataLength, ...topics);
+            return api.ethereum.log(dataOffset, dataLength, ...topics);
         },
         log1: function(dataOffset, dataLength, ...topics) {
-            api.ethereum.log(dataOffset, dataLength, ...topics);
+            return api.ethereum.log(dataOffset, dataLength, ...topics);
         },
         log2: function(dataOffset, dataLength, ...topics) {
-            api.ethereum.log(dataOffset, dataLength, ...topics);
+            return api.ethereum.log(dataOffset, dataLength, ...topics);
         },
         log3: function(dataOffset, dataLength, ...topics) {
-            api.ethereum.log(dataOffset, dataLength, ...topics);
+            return api.ethereum.log(dataOffset, dataLength, ...topics);
         },
         log4: function(dataOffset, dataLength, ...topics) {
-            api.ethereum.log(dataOffset, dataLength, ...topics);
+            return api.ethereum.log(dataOffset, dataLength, ...topics);
         },
         // result blockNumber i64
-        getBlockNumber: function (stack) {
-            const result = jsvm_env.getBlockNumber();
+        getBlockNumber: function ({stack, position}) {
+            const result = toBN(jsvm_env.getBlockNumber());
+            stack.push(result);
             logger.debug('NUMBER', [], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return {stack, position};
         },
-        getTxOrigin: function (stack) {
-            const address = jsvm_env.getTxOrigin();
+        getTxOrigin: function ({stack, position}) {
+            const address = toBN(jsvm_env.getTxOrigin());
+            stack.push(address);
             logger.debug('ORIGIN', [], [address], getCache(), getMemory(), stack);
-            return toBN(address);
+            return {stack, position};
         },
-        finish: function (dataOffset, dataLength, stack) {
+        finish: function (dataOffset, dataLength, {stack, position}){
             const res = jsvm_env.finish(dataOffset, dataLength);
             logger.debug('FINISH', [dataOffset, dataLength], [res], getCache(), getMemory(), stack);
             finishAction(res);
+            return {stack, position: 0};
         },
-        revert: function (dataOffset, dataLength, stack) {
+        revert: function (dataOffset, dataLength, {stack, position}){
             const res = jsvm_env.revert(dataOffset, dataLength);
             console.log('revert');
             logger.debug('REVERT', [dataOffset, dataLength], [res], getCache(), getMemory(), stack);
             revertAction(res);
+            return {stack, position: 0};
         },
         // result dataSize i32
-        getReturnDataSize: function (stack) {
-            const result = jsvm_env.getReturnDataSize();
+        getReturnDataSize: function ({stack, position}) {
+            const result = toBN(jsvm_env.getReturnDataSize());
+            stack.push(result);
             logger.debug('RETURNDATASIZE', [], [result], getCache(), getMemory(), stack);
-            return toBN(address);
+            return {stack, position};
         },
-        returnDataCopy: function (resultOffset, dataOffset, length, stack) {
+        returnDataCopy: function (resultOffset, dataOffset, length, {stack, position}){
             jsvm_env.returnDataCopy(resultOffset, dataOffset, length);
             logger.debug('RETURNDATACOPY', [resultOffset, dataOffset, length], [], getCache(), getMemory(), stack);
+            return;
         },
-        selfDestruct: function (address, stack) {
+        selfDestruct: function (address, {stack, position}){
             jsvm_env.selfDestruct(BN2uint8arr(address));
             logger.debug('SELFDESTRUCT', [address], [], getCache(), getMemory(), stack);
             finishAction();
+            return {stack, position: 0};
         },
-        // result blockTimestamp i64,
-        getBlockTimestamp: function (stack) {
-            const result = jsvm_env.getBlockTimestamp();
+        getBlockTimestamp: function ({stack, position}) {
+            const result = toBN(jsvm_env.getBlockTimestamp());
+            stack.push(result);
             logger.debug('TIMESTAMP', [], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return {stack, position};
         },
-        return: (offset, length, stack) => {
+        return: (offset, length, {stack, position}) => {
             const result = jsvm_env.finish(offset, length);
             logger.debug('RETURN', [offset, length], [result], getCache(), getMemory(), stack);
-            return finishAction(result);
+            finishAction(result);
+            return {stack, position: 0};
         },
-        revert: (offset, length, stack) => {
+        revert: (offset, length, {stack, position}) => {
             const result = jsvm_env.revert(offset, length);
             logger.debug('REVERT', [offset, length], [result], getCache(), getMemory(), stack);
-            return revertAction(result);
+            revertAction(result);
+            return {stack, position: 0};
         },
-        stop: (stack) => {
+        stop: ({stack, position}) => {
             return api.ethereum.return(toBN(0), toBN(0), stack);
         },
         keccak256: () => {
@@ -372,133 +407,156 @@ const initializeImports = (
         },
         uint256Max: () => new BN('10000000000000000000000000000000000000000000000000000000000000000', 16),
         // mimick evm overflow
-        add: (a, b, stack) => {
+        add: (a, b, {stack, position}) => {
             const result = a.add(b).mod(api.ethereum.uint256Max());
+            stack.push(result);
             logger.debug('ADD', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        mul: (a, b, stack) => {
+        mul: (a, b, {stack, position}) => {
             const result = a.mul(b).mod(api.ethereum.uint256Max());
+            stack.push(result);
             logger.debug('MUL', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
         // mimick evm underflow
-        sub: (a, b, stack) => {
+        sub: (a, b, {stack, position}) => {
             const result = a.sub(b).mod(api.ethereum.uint256Max());
+            stack.push(result);
             logger.debug('SUB', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        div: (a, b, stack) => {
+        div: (a, b, {stack, position}) => {
             const result = a.abs().div(b.abs());
+            stack.push(result);
             logger.debug('DIV', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        sdiv: (a, b, stack) => {
+        sdiv: (a, b, {stack, position}) => {
             const result = a.div(b);
+            stack.push(result);
             logger.debug('SDIV', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        mod: (a, b, stack) => {
+        mod: (a, b, {stack, position}) => {
             const result = a.abs().mod(b.abs());
+            stack.push(result);
             logger.debug('MOD', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        smod: (a, b, stack) => {
+        smod: (a, b, {stack, position}) => {
             const result = a.mod(b);
+            stack.push(result);
             logger.debug('SMOD', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        addmod: (a, b, c, stack) => {
+        addmod: (a, b, c, {stack, position}) => {
             const result = api.ethereum.mod(api.ethereum.add(a, b), c);
+            stack.push(result);
             logger.debug('ADDMOD', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        mulmod: (a, b, c, stack) => {
+        mulmod: (a, b, c, {stack, position}) => {
             const result = api.ethereum.mod(api.ethereum.mul(a, b), c);
+            stack.push(result);
             logger.debug('MULMOD', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        exp: (a, b, stack) => {
+        exp: (a, b, {stack, position}) => {
             if (b.lt(toBN(0))) return toBN(0);
             const result = a.exp(b);
+            stack.push(result);
             logger.debug('EXP', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
         signextend: (a, b) => {
             throw new Error('signextend unimplemented');
         },
-        lt: (a, b, stack) => {
+        lt: (a, b, {stack, position}) => {
             let result = a.abs().lt(b.abs());
             result = toBN(result ? 1 : 0);
+            stack.push(result);
             logger.debug('LT', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        gt: (a, b, stack) => {
+        gt: (a, b, {stack, position}) => {
             let result = a.abs().gt(b.abs());
             result = toBN(result ? 1 : 0);
+            stack.push(result);
             logger.debug('GT', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        slt: (a, b, stack) => {
+        slt: (a, b, {stack, position}) => {
             let result = a.lt(b);
             result = toBN(result ? 1 : 0);
+            stack.push(result);
             logger.debug('SLT', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        sgt: (a, b, stack) => {
+        sgt: (a, b, {stack, position}) => {
             let result = a.gt(b);
             result = toBN(result ? 1 : 0);
+            stack.push(result);
             logger.debug('SGT', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        eq: (a, b, stack) => {
+        eq: (a, b, {stack, position}) => {
             let result = a.eq(b);
             result = toBN(result ? 1 : 0);
+            stack.push(result);
             logger.debug('EQ', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        iszero: (a, stack) => {
+        iszero: (a, {stack, position}) => {
             let result = a.isZero();
             result = toBN(result ? 1 : 0);
+            stack.push(result);
             logger.debug('SAR', [a], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        and: (a, b, stack) => {
+        and: (a, b, {stack, position}) => {
             const result = a.and(b);
+            stack.push(result);
             logger.debug('AND', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        or: (a, b, stack) => {
+        or: (a, b, {stack, position}) => {
             const result = a.or(b);
+            stack.push(result);
             logger.debug('OR', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        xor: (a, b, stack) => {
+        xor: (a, b, {stack, position}) => {
             const result = a.xor(b);
+            stack.push(result);
             logger.debug('XOR', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        not: (a, stack) => {
+        not: (a, {stack, position}) => {
             const result = a.notn(256);
+            stack.push(result);
             logger.debug('NOT', [a], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        byte: (nth, bb, stack) => {
-            const result = BN2uint8arr(bb).slice(nth, nth + 1);
+        byte: (nth, bb, {stack, position}) => {
+            const result = toBN(BN2uint8arr(bb).slice(nth, nth + 1));
+            stack.push(result);
             logger.debug('BYTE', [a, b], [result], getCache(), getMemory(), stack);
-            return toBN(result);
+            return {stack, position};
         },
-        shl: (a, b, stack) => {
+        shl: (a, b, {stack, position}) => {
             const result = b.shln(a.toNumber());
+            stack.push(result);
             logger.debug('SHL', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        shr: (a, b, stack) => {
+        shr: (a, b, {stack, position}) => {
             const result = b.shrn(a.toNumber());
+            stack.push(result);
             logger.debug('SHR', [a, b], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        sar: (nobits, value, stack) => {
+        sar: (nobits, value, {stack, position}) => {
             const _nobits = nobits.toNumber();
             let valueBase2;
             if (value.isNeg()) {
@@ -511,54 +569,58 @@ const initializeImports = (
             // add MSB * _nobits
             valueBase2 = valueBase2[0].repeat(_nobits) + valueBase2;
             const result = (new BN(valueBase2, 2)).fromTwos(256);
+            stack.push(result);
             logger.debug('SAR', [nobits, value], [result], getCache(), getMemory(), stack);
-            return result;
+            return {stack, position};
         },
-        handlePush: (code, bytecode, position, stack) => {
+        handlePush: (code, bytecode, {stack, position}) => {
             const no = code - 0x60 + 1;
             const value = toBN(bytecode.slice(position, position + no));
-            logger.debug('PUSH' + no + ' 0x' + value.toString(16).padStart(no, '0'), [value], [], getCache(), getMemory(), stack);
             stack.push(value);
             position += no;
-            return {bytecode: bytecode, stack, position};
+
+            logger.debug('PUSH' + no + ' 0x' + value.toString(16).padStart(no, '0'), [value], [], getCache(), getMemory(), stack);
+            return {stack, position};
         },
-        handleSwap: (code, stack) => {
+        handleSwap: (code, {stack, position}) => {
             const no = code - 0x90 + 1;
             if (no >= stack.length) throw new Error(`Invalid SWAP${no} ; stack: ${stack}`);
             const last = stack.pop();
             const spliced = stack.splice(stack.length - no, 1, last);
             stack.push(spliced[0]);
+
             logger.debug('SWAP' + no, [], [], getCache(), getMemory(), stack);
-            return stack;
+            return {stack, position};
         },
-        handleDup: (code, stack) => {
+        handleDup: (code, {stack, position}) => {
             const no = code - 0x80 + 1;
             if (no > stack.length) throw new Error(`Invalid DUP${no} ; stack: ${stack}`);
             const value = stack[stack.length - no];
+            stack.push(value);
 
             logger.debug('DUP' + no, [], [], getCache(), getMemory(), stack);
-            stack.push(value);
-            return stack;
+            return {stack, position};
         },
-        jump: (newpos, stack) => {
+        jump: (newpos, {stack}) => {
             if (!newpos && newpos !== 0) throw new Error(`Invalid JUMP ${newpos}`);
             newpos = newpos.toNumber();
             logger.debug('JUMP', [newpos], [], getCache(), getMemory(), stack);
-            return newpos;
+            return {stack, position: newpos};
         },
-        jumpi: (newpos, condition, stack) => {
-            logger.debug('JUMPI', [condition, newpos], [], getCache(), getMemory(), stack);
+        jumpi: (newpos, condition, {stack, position}) => {
             newpos = newpos.toNumber();
-            if (condition.toNumber() === 1) return newpos;
+            if (condition.toNumber() === 1) position = newpos;
+            logger.debug('JUMPI', [condition, newpos], [], getCache(), getMemory(), stack);
+            return {stack, position};
         },
-        jumpdest:(stack) => {
+        jumpdest:({stack}) => {
             logger.debug('JUMPDEST', [], [], getCache(), getMemory(), stack);
         },
-        pop: stack => {
+        pop: ({stack, position}) => {
             stack.pop();
             logger.debug('POP', [], [], getCache(), getMemory(), stack);
-            return stack;
-        }
+            return {stack, position};
+        },
     }
 
     return api;
@@ -591,6 +653,7 @@ const interpretOpcode = async ({bytecode, stack, importObj, position}) => {
     position += 1;
     const code = parseInt(hexcode, 16);
     const opcode = opcodes[hexcode];
+    let obj;
 
     if (opcode && importObj[opcode.name]) {
         const args = [];
@@ -598,28 +661,39 @@ const interpretOpcode = async ({bytecode, stack, importObj, position}) => {
             args.push(stack.pop());
         }
 
-        if (opcode.name === 'jump') {
-            return {bytecode, stack, position: importObj.jump(...args, stack)};
+        switch(opcode.name) {
+            case 'jump':
+                obj = importObj.jump(...args, {stack, position});
+                break;
+            case 'jumpi':
+                obj = importObj.jumpi(...args, {stack, position});
+                break;
+            case 'pop':
+                obj = importObj.pop({stack, position});
+                break;
+            default:
+                obj = await importObj[opcode.name](...args, {stack, position});
         }
-        if (opcode.name === 'jumpi') {
-            return {bytecode, stack, position: importObj.jumpi(...args, stack) || position};
-        }
-        if (opcode.name === 'pop') {
-            return {bytecode, stack: importObj.pop(stack), position};
-        }
-
-        const result = await importObj[opcode.name](...args, stack);
-
-        if (result === ERROR.STOP) return {bytecode, stack, position: 0};
-        if (result) stack.push(toBN(result));
-
-        return {bytecode, stack, position};
     }
-    else if (0x60 <= code && code < 0x80) return importObj.handlePush(code, bytecode, position, stack);
-    else if (0x80 <= code && code < 0x90) return {bytecode, stack: importObj.handleDup(code, stack), position};
-    else if (0x90 <= code && code < 0xa0) return {bytecode, stack: importObj.handleSwap(code, stack), position};
+    else if (0x60 <= code && code < 0x80) {
+        obj = importObj.handlePush(code, bytecode, {stack, position});
+    }
+    else if (0x80 <= code && code < 0x90) {
+        obj = importObj.handleDup(code, {stack, position});
+    }
+    else if (0x90 <= code && code < 0xa0) {
+        obj = importObj.handleSwap(code, {stack, position});
+    }
+    else {
+        throw new Error(`Invalid opcode ${hexcode}; ${typeof hexcode} - ${JSON.stringify(opcode)}`);
+    }
 
-    throw new Error(`Invalid opcode ${hexcode}; ${typeof hexcode} - ${JSON.stringify(opcode)}`);
+    if (obj) {
+        stack = typeof obj.stack !== 'undefined' ? obj.stack : stack;
+        position = typeof obj.position !== 'undefined' ? obj.position : position;
+    }
+
+    return {bytecode, stack, position};
 }
 
 const opcodes = {

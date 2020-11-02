@@ -342,7 +342,7 @@ function instance ({
             currentPromise.minstance = wmodule.instance;
             ologger.debug('--', [], [], getCache(), getMemory());
             try {
-                wmodule.instance.exports.main();
+                await wmodule.instance.exports.main();
             } catch (e) {
                 console.log(e.message);
 

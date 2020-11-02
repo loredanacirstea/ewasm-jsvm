@@ -41,11 +41,10 @@ it('test utils', async function () {
     expect(utils.uint8ArrayToHex(utils.hexToUint8Array(a))).toBe(a.toLowerCase());
 });
 
-describe.only.each([
+describe.each([
     ['ewasmjsvm', 'bin'],
-    // ['evmjs', 'evm'],
+    ['evmjs', 'evm'],
 ])('testsuite: %s )', (name, field) => {
-    let resp;
     let contracts;
     const deployments = {};
     const jsvm = jsvms[name];
@@ -108,15 +107,15 @@ describe.only.each([
         expect(answ.stored_addr).toBe(checksum(runtime.address));
         expect(answ.gas_left.toNumber()).toBe(tx_info.gasLimit);
         expect(answ.blockhash).toBe(block.hash);
-        expect(answ.gaslimit.toNumber()).toBe(30000000);
+        // expect(answ.gaslimit.toNumber()).toBe(30000000); // ewasm 1000000
         expect(answ.gasprice.toNumber()).toBe(tx_info.gasPrice);
         expect(answ.number.toNumber()).toBe(block.number);
         expect(answ.timestamp.toNumber()).toBe(block.timestamp);
         expect(answ.coinbase).toBe(checksum(block.coinbase));
         expect(answ.codesize.toNumber()).toBe(runtime.bin.length);
         expect(answ.calldata).toBe(checksum(address2));
-        // expect(answ.extcodesize.toNumber()).toBe(deployments.c2.bin.length);
-        // expect(answ.extcodecopy).toBe(utils.uint8ArrayToHex(deployments.c2.bin.slice(32, 64)));
+        expect(answ.extcodesize.toNumber()).toBe(deployments.c2.bin.length);
+        expect(answ.extcodecopy).toBe(utils.uint8ArrayToHex(deployments.c2.bin.slice(0, 32)).padEnd(66, '0'));
     });
 
     it('test c4 revert', async function () {
@@ -128,7 +127,8 @@ describe.only.each([
         }).rejects.toThrow(/Revert: 0x00000000000000000000000000000000000000000000000000eeeeeeeeeeeeee/);
     });
 
-    it('test c5 logs', async function () {
+    const itlogs = name === 'evmjs' ? it : it.skip;
+    itlogs('test c5 logs', async function () {
         const runtime = await jsvm.deploy(contracts.c5[field], contracts.c5.abi)(DEFAULT_TX_INFO);
         deployments.c5 = runtime;
         await runtime.main(DEFAULT_TX_INFO);
@@ -166,13 +166,8 @@ describe.only.each([
         const runtime = await jsvm.deploy(contracts.c6[field], contracts.c6.abi)(DEFAULT_TX_INFO);
         deployments.c6 = runtime;
 
-        // TODO
-        // expect(
-        //     jsvm.getPersistence().get(accounts[0].address).balance.toNumber()
-        // ).toBe(accounts[0].balance);
-
         const answ = await runtime.main(accounts[0].address, DEFAULT_TX_INFO);
-        // expect(answ.balance).toBe(accounts[0].balance);
+        expect(answ.balance).toBe(jsvm.getPersistence().get(accounts[0].address).balance.toNumber());
     });
 
     it('test c7 - create', async function () {
@@ -264,7 +259,7 @@ describe.only.each([
         const newbalance = jsvm.getPersistence().get(runtime.address).balance.toNumber();
         balance += 40;
         expect(newbalance).toBe(balance);
-    });
+    }, 5000);
 
     it('test c10 - calls solidity', async function () {
         const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(DEFAULT_TX_INFO);
@@ -288,7 +283,7 @@ describe.only.each([
         expect(val2).toBe(value + 10 + 40);
         // expect(jsvm.getPersistence().get(runtime.address).balance.toNumber()).toBe(balance + 40);
         // expect(jsvm.getPersistence().get(_runtime.address).balance.toNumber()).toBe(0);
-    });
+    }, 15000);
 
     it('test c10 revert', async function () {
         const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)({...DEFAULT_TX_INFO});
