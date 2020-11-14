@@ -677,5 +677,7 @@ const encodeInput = (args, functionAbi) => {
     return calldata;
 }
 
-module.exports = {initializeImports, instantiateModule, vmcore, decodeOutput, encodeInput};
+const entrypoint = functionAbi => functionAbi.name;
+
+module.exports = {initializeImports, instantiateModule, vmcore, decodeOutput, encodeInput, entrypoint};
 

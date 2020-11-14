@@ -23,6 +23,8 @@ function instance ({
     initializeImports,
     instantiateModule,
     decodeOutput,
+    encodeInput,
+    entrypoint,
 }) {
     // persistence = {accounts, logs, blocks}
     // Internal logger
@@ -188,6 +190,7 @@ function instance ({
         let currentPromise = {
             resolve, reject,
             name: getfname(fabi),
+            methodName: entrypoint ? entrypoint(fabi) : 'main',
             txInfo,
             gas: {limit: toBN(txInfo.gasLimit), price: toBN(txInfo.gasPrice), used: toBN(0)},
             data: typeof txInfo.data === 'string' ? hexToUint8Array(txInfo.data) : txInfo.data,
@@ -287,10 +290,9 @@ function instance ({
         let calldata;
         if (encodeInput) calldata = encodeInput(args, fabi);
         else {
-            const calldataTypes = (wabi.find(abi => abi.name === fname) || {}).inputs;
+            const calldataTypes = (wabi.find(abi => abi.name === fname || (abi.type === fname && fname === 'constructor')) || {}).inputs;
             calldata = signature ? encodeWithSignature(signature, calldataTypes, args) : encode(calldataTypes, args);
         }
-
         txInfo.data = calldata;
 
         if (!signature && !fabi && txInfo.data.length === 0) {
@@ -349,17 +351,15 @@ function instance ({
             currentPromise.importObj = importObj; // near memory access
             ologger.debug('--', [], [], getCache(), getMemory());
 
-            // near
-            if (!wmodule.instance.exports[currentPromise.name]) {
-                return finishAction(currentPromise)(bytecode)
+            // _NEAR constructor
+            if (!wmodule.instance.exports[currentPromise.methodName]) {
+                return finishAction(currentPromise)(bytecode);
             }
 
             let result;
 
             try {
-                // result = await wmodule.instance.exports.main();
-                // near
-                result = await wmodule.instance.exports[currentPromise.name]();
+                result = await wmodule.instance.exports[currentPromise.methodName]();
             } catch (e) {
                 console.log(e.message);
 

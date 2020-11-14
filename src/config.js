@@ -84,7 +84,7 @@ const contexthandler = (msg, txobj={}) => {
     const printobj = {};
     Object.keys(txobj).forEach(key => {
         const {address, balance, storage, runtimeCode} = txobj[key];
-        printobj[key] = {address, balance: balance ? balance.toString() : '0', storage, runtimeCode: runtimeCode ? printval(runtimeCode.slice(0, 50)) : null};
+        printobj[key] = {address, balance: balance ? balance.toString() : '0', storage, runtimeCode: runtimeCode ? printval(runtimeCode && runtimeCode.slice ? runtimeCode.slice(0, 50) : runtimeCode) : null};
     })
     return msg + ' ' + printval(printobj);
 }
