@@ -22,6 +22,7 @@ function instance ({
     vmcore,
     initializeImports,
     instantiateModule,
+    decodeOutput,
 }) {
     // persistence = {accounts, logs, blocks}
     // Internal logger
@@ -114,7 +115,8 @@ function instance ({
         } else {
             const abi = wabi.find(abi => abi.name === currentPromise.name);
             ilogger.get('finishAction').debug(currentPromise.name, answ);
-            result = answ && abi && abi.outputs ? decode(abi.outputs, answ) : answ;
+            if (decodeOutput) result = decodeOutput(answ);
+            else result = answ && abi && abi.outputs ? decode(abi.outputs, answ) : answ;
         }
 
         _storeStateChanges({accounts: currentPromise.cache.context, logs: currentPromise.cache.logs});
@@ -282,8 +284,13 @@ function instance ({
         txInfo.origin = txInfo.origin || txInfo.from;
         txInfo.value = txInfo.value || '0x00';
 
-        const calldataTypes = (wabi.find(abi => abi.name === fname) || {}).inputs;
-        const calldata = signature ? encodeWithSignature(signature, calldataTypes, args) : encode(calldataTypes, args);
+        let calldata;
+        if (encodeInput) calldata = encodeInput(args, fabi);
+        else {
+            const calldataTypes = (wabi.find(abi => abi.name === fname) || {}).inputs;
+            calldata = signature ? encodeWithSignature(signature, calldataTypes, args) : encode(calldataTypes, args);
+        }
+
         txInfo.data = calldata;
 
         if (!signature && !fabi && txInfo.data.length === 0) {
@@ -339,9 +346,20 @@ function instance ({
         );
         instantiateModule(bytecode, importObj).then(async wmodule => {
             currentPromise.minstance = wmodule.instance;
+            currentPromise.importObj = importObj; // near memory access
             ologger.debug('--', [], [], getCache(), getMemory());
+
+            // near
+            if (!wmodule.instance.exports[currentPromise.name]) {
+                return finishAction(currentPromise)(bytecode)
+            }
+
+            let result;
+
             try {
-                await wmodule.instance.exports.main();
+                // result = await wmodule.instance.exports.main();
+                // near
+                result = await wmodule.instance.exports[currentPromise.name]();
             } catch (e) {
                 console.log(e.message);
 
@@ -361,6 +379,11 @@ function instance ({
                     default:
                         throw e;
                 }
+            }
+
+            // _NEAR doesn't have a finish opcode for functions that do not return, it just returns here
+            if (!currentPromise.resolved) {
+                finishAction(currentPromise)(result);
             }
         });
     }
@@ -407,7 +430,10 @@ const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...
     const clonedLogs =  cloneLogs(logs);
     const currentContext = clonedContext[address] || {};
     clonedMemory = hexToUint8Array(uint8ArrayToHex(new Uint8Array(memory.buffer)));
-    const clonedStack = stack ? stack.map(BN2uint8arr) : [];
+    const clonedStack = stack ? stack.map(val => {
+        // BN or array
+        return val instanceof Uint8Array ? val : BN2uint8arr(val);
+    }) : [];
 
     const log = {name, input, output, memory: clonedMemory, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack};
     callback(log);
