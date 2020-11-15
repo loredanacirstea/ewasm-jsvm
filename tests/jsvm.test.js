@@ -44,7 +44,7 @@ it('test utils', async function () {
 describe.each([
     ['ewasmjsvm', 'bin'],
     ['evmjs', 'evm'],
-])('testsuite: %s )', (name, field) => {
+])('testsuite: %s', (name, field) => {
     let contracts;
     const deployments = {};
     const jsvm = jsvms[name];

@@ -107,7 +107,8 @@ function instance ({
             return;
         }
         if (currentPromise.resolved) {
-            throw new Error('Promise already resolved');
+            console.error('Promise already resolved');
+            // throw new Error('Promise already resolved');
         }
         let result;
         if (currentPromise.name === 'constructor') {
@@ -368,10 +369,10 @@ function instance ({
                         // wasm execution stopped, so it can be restarted
                         // TODO - restart needs to wait until call result
                         internalCallWrapContinue();
-                        break;
+                        return;
                     case ERROR.ASYNC_RESOURCE:
                         asyncResourceWrapContinue();
-                        break;
+                        return;
                     case ERROR.STOP:
                         // this is how we stop the wasm module execution
                         // for return, revert, etc.
