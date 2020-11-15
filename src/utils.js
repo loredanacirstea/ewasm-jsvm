@@ -94,6 +94,8 @@ const toBN = n => {
 
 const clone = value => JSON.parse(JSON.stringify(value));
 
+const keccak256 = ethers.utils.keccak256;
+
 module.exports = {
     strip0x,
     encodeWithSignature,
@@ -114,4 +116,5 @@ module.exports = {
     toBN,
     BN2uint8arr,
     clone,
+    keccak256,
 }

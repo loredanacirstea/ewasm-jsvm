@@ -84,7 +84,7 @@ const contexthandler = (msg, txobj={}) => {
     const printobj = {};
     Object.keys(txobj).forEach(key => {
         const {address, balance, storage, runtimeCode} = txobj[key];
-        printobj[key] = {address, balance: balance ? balance.toString() : '0', storage, runtimeCode: runtimeCode ? printval(runtimeCode.slice(0, 50)) : null};
+        printobj[key] = {address, balance: balance ? balance.toString() : '0', storage, runtimeCode: runtimeCode ? printval(runtimeCode && runtimeCode.slice ? runtimeCode.slice(0, 50) : runtimeCode) : null};
     })
     return msg + ' ' + printval(printobj);
 }
@@ -98,5 +98,7 @@ Logger.get('ewasmjsvm').spawn('tx', null, txhandler);
 Logger.get('ewasmjsvm').spawn('context', null, contexthandler);
 Logger.get('evmjs').spawn('tx', null, txhandler);
 Logger.get('evmjs').spawn('context', null, contexthandler);
+Logger.get('nearjs').spawn('tx', null, txhandler);
+Logger.get('nearjs').spawn('context', null, contexthandler);
 
 module.exports = {Logger, logg};

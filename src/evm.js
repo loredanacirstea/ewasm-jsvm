@@ -3,6 +3,7 @@ const {
     hexToUint8Array,
     toBN,
     BN2uint8arr,
+    keccak256,
 }  = require('./utils.js');
 
 const initializeImports = (
@@ -399,8 +400,17 @@ const initializeImports = (
         stop: ({stack, position}) => {
             return api.ethereum.return(toBN(0), toBN(0), stack);
         },
-        keccak256: () => {
-            throw new Error('Not implemented');
+        keccak256: (offset, length, {stack, position}) => {
+            const slots = Math.ceil(length.toNumber() / 32);
+            const data = [...new Array(slots).keys()].map(index => {
+                const delta = toBN(index * 32);
+                return jsvm_env.loadMemory(offset.add(delta));
+            }).reduce((accum, value) => accum.concat(value), []);
+            const hash = keccak256(data);
+            const result = toBN(hash);
+            stack.push(result);
+            logger.debug('keccak256', [offset, length], [result], getCache(), getMemory(), stack);
+            return {stack, position: 0};
         },
         uint256Max: () => new BN('10000000000000000000000000000000000000000000000000000000000000000', 16),
         // mimick evm overflow
@@ -461,13 +471,16 @@ const initializeImports = (
         },
         exp: (a, b, {stack, position}) => {
             if (b.lt(toBN(0))) return toBN(0);
-            const result = a.exp(b);
+            const result = a.pow(b);
             stack.push(result);
             logger.debug('EXP', [a, b], [result], getCache(), getMemory(), stack);
             return {stack, position};
         },
-        signextend: (a, b) => {
-            throw new Error('signextend unimplemented');
+        signextend: (size, value, {stack, position}) => {
+            const result = value;
+            stack.push(result);
+            logger.debug('SIGNEXTEND', [size, value], [result], getCache(), getMemory(), stack);
+            return {stack, position};
         },
         lt: (a, b, {stack, position}) => {
             let result = a.abs().lt(b.abs());
@@ -624,6 +637,7 @@ const initializeImports = (
 }
 
 const instantiateModule = (bytecode, importObj) => {
+    if (!bytecode) throw new Error('No bytecode found');
     if (typeof bytecode === 'string') bytecode = hexToUint8Array(bytecode);
     if (!(bytecode instanceof Uint8Array)) throw new Error('evm - bytecode not Uint8Array');
     const wmodule = {
@@ -722,7 +736,7 @@ const opcodes = {
     '1c': {name: 'shr', arity: 2},
     '1d': {name: 'sar', arity: 2},
 
-    '20': {name: 'keccak256', arity: 1},
+    '20': {name: 'keccak256', arity: 2},
 
     '30': {name: 'getAddress', arity: 0},
     '31': {name: 'getExternalBalance', arity: 1},
