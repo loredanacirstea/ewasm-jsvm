@@ -58,6 +58,10 @@ function instance ({
 
         ilogger.get('initializeWrap').debug(address);
 
+        if (!wabi.find(fabi => fabi.type === 'constructor')) {
+            wabi.push({ name: 'constructor', type: 'constructor', stateMutability: 'nonpayable', inputs: [], outputs: []});
+        }
+
         const getfname = (fabi) => !atRuntime ? 'constructor' : (fabi ? fabi.name : 'main');
 
         let wrappedInstance = {
