@@ -1,4 +1,4 @@
-pragma solidity ^0.8.0;
+pragma solidity ^0.7.0;
 
 contract c10 {
     uint256 public value = 5;
