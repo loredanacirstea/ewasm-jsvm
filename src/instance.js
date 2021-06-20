@@ -25,6 +25,7 @@ function instance ({
     decodeOutput,
     encodeInput,
     entrypoint,
+    stateProvider,
 }) {
     // persistence = {accounts, logs, blocks}
     // Internal logger
@@ -264,16 +265,40 @@ function instance ({
             __startExecution();
         }
 
-        const asyncResourceWrap = (account) => {
-            currentPromise.interruptResourceObj = {account};
+        const asyncResourceWrap = (account, storageKeys) => {
+            currentPromise.interruptResourceObj = {account, storageKeys};
             ilogger.debug('asyncResourceWrap');
         }
 
         const asyncResourceWrapContinue = async() => {
-            const data = persistence.accounts.get(currentPromise.interruptResourceObj.account);
+            const {account, storageKeys} = currentPromise.interruptResourceObj;
+            let data = persistence.accounts.get(account);
+
+            // Get account data from provider
+            if (data.empty && stateProvider) {
+                const runtimeCode = await stateProvider.getCode(account);
+                const balance = await stateProvider.getBalance(account);
+                data.runtimeCode = typeof runtimeCode === 'string' ? hexToUint8Array(runtimeCode) : runtimeCode;
+                data.balance = toBN(balance);
+            }
+
+            // Get storage values if needed
+            if (storageKeys) {
+                for (let key of storageKeys) {
+                    let value;
+                    if (stateProvider) {
+                        value = await stateProvider.getStorageAt(account, key);
+                    }
+                    else {
+                        value = '0x0000000000000000000000000000000000000000000000000000000000000000';
+                    }
+                    data.storage[key] = hexToUint8Array(value);
+                }
+            }
+
             // We must delete this, to avoid requesting the resource over and over again
             delete data.empty;
-            currentPromise.cache.context[currentPromise.interruptResourceObj.account] = data;
+            currentPromise.cache.context[account] = data;
             ilogger.get('asyncResourceWrapContinue').debug(data.account, data.balance, Object.keys(currentPromise.cache.context));
             currentPromise.interruptResourceObj = {};
 

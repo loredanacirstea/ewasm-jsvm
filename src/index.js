@@ -19,11 +19,12 @@ const ewasmjsvm = () => _instance({
     initializeImports: _ewasmjsvm.initializeImports,
     instantiateModule: _ewasmjsvm.instantiateModule,
 });
-const evmjs = () => _instance({
+const evmjs = (options = {}) => _instance({
     vmname: 'evmjs',
     vmcore: vmcore(),
     initializeImports: _evm.initializeImports,
     instantiateModule: _evm.instantiateModule,
+    stateProvider: options.provider,
 });
 const nearjs = () => _instance({
     vmname: 'nearjs',

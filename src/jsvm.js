@@ -53,7 +53,14 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 throw new Error(ERROR.ASYNC_RESOURCE);
             }
             result.getStorage = (key) => {
-                return result.storage[key];
+                const value = result.storage[key];
+                if (typeof value === 'undefined') {
+                    Logger.get('jsvm').debug('asyncResourceWrap', account);
+                    asyncResourceWrap(account, [key]);
+                    // execution stops here
+                    throw new Error(ERROR.ASYNC_RESOURCE);
+                }
+                return value;
             }
             result.setStorage = (key, value) => {
                 result.storage[key] = value;
