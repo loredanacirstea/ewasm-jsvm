@@ -83,9 +83,12 @@ const BN2uint8arr = n => {
     return hexToUint8Array(res);
 }
 const toBN = n => {
+    // from hex
     if (typeof n === 'string' && n.substring(0, 2) === '0x') {
         return new BN(n.substring(2), 16);
     }
+    // from ethers BigNumber
+    if (typeof n === 'object' && n._hex) return new BN(n._hex.substring(2), 16);
     if (n instanceof Uint8Array) return uint8arrToBN(n);
     if (BN.isBN(n)) return n;
     if (typeof n === 'bigint') return new BN(n.toString());
