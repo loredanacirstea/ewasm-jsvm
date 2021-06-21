@@ -413,7 +413,9 @@ const initializeImports = (
             const data = [...new Array(slots).keys()].map(index => {
                 const delta = toBN(index * 32);
                 return jsvm_env.loadMemory(offset.add(delta));
-            }).reduce((accum, value) => accum.concat(value), []);
+            }).reduce((accum, value) => {
+                return new Uint8Array([...accum, ...value]);
+            }, []);
             const hash = keccak256(data);
             const result = toBN(hash);
             stack.push(result);

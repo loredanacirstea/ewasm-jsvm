@@ -82,7 +82,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             transferValue(persistenceWrap)(txInfo.from, txInfo.to, txInfo.value);
         }
 
-        let lastReturnData;
+        let lastReturnData = new Uint8Array(0);
 
         let gas = {
             limit: toBN(txObj.gasLimit || 4000000),
@@ -112,7 +112,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         }
 
         const getReturnData = () => lastReturnData;
-        const setReturnData = (data) => lastReturnData = data;
+        const setReturnData = (data) => lastReturnData = data || new Uint8Array(0);
 
         return internalCall(
             txInfo,
