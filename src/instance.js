@@ -379,7 +379,7 @@ function instance ({
         instantiateModule(bytecode, importObj).then(async wmodule => {
             currentPromise.minstance = wmodule.instance;
             currentPromise.importObj = importObj; // near memory access
-            ologger.debug('--', [], [], getCache(), getMemory());
+            ologger.debug('--', [], [], getCache());
 
             // _NEAR constructor
             if (!wmodule.instance.exports[currentPromise.methodName]) {
@@ -454,18 +454,17 @@ const storeStateChanges = (ilogger, persistence) => (context) => {
 }
 
 const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...args) => {
-    const [name, input, output, cache, memory, stack] = args;
+    const [name, input, output, cache, stack, changed] = args;
     const {context, logs, data} = cache;
     const clonedContext = cloneContext(context);
     const clonedLogs =  cloneLogs(logs);
     const currentContext = clonedContext[address] || {};
-    clonedMemory = hexToUint8Array(uint8ArrayToHex(new Uint8Array(memory.buffer)));
     const clonedStack = stack ? stack.map(val => {
         // BN or array
         return val instanceof Uint8Array ? val : BN2uint8arr(val);
     }) : [];
 
-    const log = {name, input, output, memory: clonedMemory, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack};
+    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed};
     callback(log);
     // we return nothing, because we don't print anything;
     return;

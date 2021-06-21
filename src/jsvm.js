@@ -63,6 +63,13 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 return value;
             }
             result.setStorage = (key, value) => {
+                const oldvalue = result.storage[key];
+                if (typeof oldvalue === 'undefined') {
+                    Logger.get('jsvm').debug('asyncResourceWrap', account);
+                    asyncResourceWrap(account, [key]);
+                    // execution stops here
+                    throw new Error(ERROR.ASYNC_RESOURCE);
+                }
                 result.storage[key] = value;
                 persistenceWrap.set(result);
             }

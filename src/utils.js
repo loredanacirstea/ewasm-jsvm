@@ -78,8 +78,9 @@ const isHexWasm = source => source.substring(0, 8) === '0061736d'
 const isBinWasm = uint8Array => uint8Array[0] === 0 && uint8Array[1] === 97 && uint8Array[2] === 115 && uint8Array[3] === 109;
 
 const uint8arrToBN = uint8arr => new BN(strip0x(uint8ArrayToHex(uint8arr)), 16);
+const BN2hex = n => n.toString(16).padStart(64, '0');
 const BN2uint8arr = n => {
-    const res = n.toString(16).padStart(64, '0');
+    const res = BN2hex(n);
     return hexToUint8Array(res);
 }
 const toBN = n => {
@@ -117,6 +118,7 @@ module.exports = {
     randomAddress,
     extractAddress,
     toBN,
+    BN2hex,
     BN2uint8arr,
     clone,
     keccak256,
