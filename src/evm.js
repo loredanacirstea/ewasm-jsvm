@@ -599,7 +599,7 @@ const initializeImports = (
             stack.push(value);
             position += no;
 
-            logger.debug('PUSH' + no + ' 0x' + value.toString(16).padStart(no, '0'), [value], [], getCache(), stack);
+            logger.debug('PUSH' + no + ' 0x' + value.toString(16).padStart(no*2, '0'), [value], [], getCache(), stack);
             return {stack, position};
         },
         handleSwap: (code, {stack, position}) => {
