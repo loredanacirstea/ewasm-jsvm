@@ -531,7 +531,7 @@ const initializeImports = (
             let result = a.isZero();
             result = toBN(result ? 1 : 0);
             stack.push(result);
-            logger.debug('SAR', [a], [result], getCache(), stack);
+            logger.debug('ISZERO', [a], [result], getCache(), stack);
             return {stack, position};
         },
         and: (a, b, {stack, position}) => {
