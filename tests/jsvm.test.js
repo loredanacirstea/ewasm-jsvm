@@ -41,6 +41,12 @@ it('test utils', async function () {
     expect(utils.uint8ArrayToHex(utils.hexToUint8Array(a))).toBe(a.toLowerCase());
 });
 
+it('test gascost 1', async function () {
+    const runtime = await evmjs.runtimeSim('6010600401', []);
+    await runtime.mainRaw({...DEFAULT_TX_INFO});
+    expect(runtime.gas.used.toNumber()).toBe(9);
+});
+
 describe.each([
     ['ewasmjsvm', 'bin'],
     ['evmjs', 'evm'],
@@ -48,6 +54,7 @@ describe.each([
     let contracts;
     const deployments = {};
     const jsvm = jsvms[name];
+    const itevmjs = name === 'evmjs' ? it : it.skip;
 
     beforeAll(async () => {
         contracts = await compileContracts();
@@ -83,6 +90,14 @@ describe.each([
         expect(answ.val.toNumber()).toBe(999999);
     });
 
+    itevmjs('test gascost 2', async function () {
+        const runtime = await jsvm.deploy(contracts.Metering[field], contracts.Metering.abi)({...DEFAULT_TX_INFO});
+        const answ = await runtime.mainRaw({...DEFAULT_TX_INFO});
+        expect(uint8ArrayToHex(answ)).toBe('0x00000000000000000000000000000000000000000000000000eeeeeeeeeeeeee');
+        // console.log(runtime.logs.map(v => `${v.name} - ${v.gasCost}`).join('\n'));
+        // expect(runtime.gas.used.toNumber()).toBe(57);
+    });
+
     it('test c3 multiple opcodes', async function () {
         const tx_info = {...DEFAULT_TX_INFO, value: 1400};
         let fromBalance = jsvm.getPersistence().get(tx_info.from).balance;
@@ -105,7 +120,7 @@ describe.each([
         expect(answ.origin).toBe(checksum(tx_info.from));
         expect(answ.difficulty.toNumber()).toBe(block.difficulty);
         expect(answ.stored_addr).toBe(checksum(runtime.address));
-        expect(answ.gas_left.toNumber()).toBe(tx_info.gasLimit);
+        expect(answ.gas_left.toNumber()).toBe(998392);
         expect(answ.blockhash).toBe(block.hash);
         // expect(answ.gaslimit.toNumber()).toBe(30000000); // ewasm 1000000
         expect(answ.gasprice.toNumber()).toBe(tx_info.gasPrice);
@@ -127,8 +142,7 @@ describe.each([
         }).rejects.toThrow(/Revert: 0x00000000000000000000000000000000000000000000000000eeeeeeeeeeeeee/);
     });
 
-    const itlogs = name === 'evmjs' ? it : it.skip;
-    itlogs('test c5 logs', async function () {
+    itevmjs('test c5 logs', async function () {
         const runtime = await jsvm.deploy(contracts.c5[field], contracts.c5.abi)(DEFAULT_TX_INFO);
         deployments.c5 = runtime;
         await runtime.main(DEFAULT_TX_INFO);

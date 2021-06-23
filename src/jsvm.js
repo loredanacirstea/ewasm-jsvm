@@ -90,8 +90,9 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             used: toBN(0),
         }
         const getGas = () => gas;
-        const useGas = gas => {
-            gas.used = gas.used.add(gas);
+        const useGas = gasUnits => {
+            gas.used = gas.used.add(toBN(gasUnits));
+            if (gas.used.gt(gas.limit)) throw new Error(ERROR.OUT_OF_GAS);
         }
         txInfo.gas = gas;
 
@@ -550,6 +551,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     Logger.get('jsvm').get('getExternalCodeSize').debug(address);
                     return toBN(persistence.get(address).runtimeCode.length);
                 },
+                getGas: getGas,
                 getGasLeft: function () {
                     const gas = getGas();
                     return gas.limit.sub(gas.used);

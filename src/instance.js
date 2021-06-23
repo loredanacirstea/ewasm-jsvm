@@ -89,12 +89,12 @@ function instance ({
             abi: wabi,
             bin: bytecode,
         }
-        const opcodelogs = (logs) => {
-            wrappedInstance.logs = logs;
+        const appendtxinfo = (obj) => {
+            Object.assign(wrappedInstance, obj);
         }
 
-        const _finishAction = finishAction(ilogger, vmcore.persistence, address, wabi, opcodelogs);
-        const _revertAction = revertAction(ilogger, vmcore.persistence, address, opcodelogs);
+        const _finishAction = finishAction(ilogger, vmcore.persistence, address, wabi, appendtxinfo);
+        const _revertAction = revertAction(ilogger, vmcore.persistence, address, appendtxinfo);
         const _startExecution = startExecution({
             vmcore,
             ilogger,
@@ -122,7 +122,7 @@ function instance ({
 
     const _storeStateChanges = storeStateChanges(ilogger, vmcore.persistence);
 
-    const finishAction = (ilogger, persistence, address, wabi, opcodelogs) => currentPromise => (answ, e) => {
+    const finishAction = (ilogger, persistence, address, wabi, appendtxinfo) => currentPromise => ({result: answ, gas}, e) => {
         if (!currentPromise) {
             console.log('No queued promise found.'); // throw new Error('No queued promise found.');
             return;
@@ -143,7 +143,10 @@ function instance ({
             else result = answ !== null && typeof answ !== 'undefined' && abi && abi.outputs ? decode(abi.outputs, answ) : answ;
         }
 
-        opcodelogs(currentPromise.opcodelogs)
+        appendtxinfo({
+            logs: currentPromise.opcodelogs,
+            gas: gas,
+        });
 
         if (!e) {
             _storeStateChanges({accounts: currentPromise.cache.context, logs: currentPromise.cache.logs});
@@ -158,7 +161,7 @@ function instance ({
         return ERROR.STOP;
     }
 
-    const revertAction = (ilogger, persistence, address, opcodelogs) => currentPromise => answ => {
+    const revertAction = (ilogger, persistence, address, appendtxinfo) => currentPromise => ({result: answ, gas}) => {
         if (!currentPromise) {
             console.log('No queued promise found.'); // throw new Error('No queued promise found.');
             return;
@@ -168,7 +171,7 @@ function instance ({
         }
         const error = new Error('Revert: ' + uint8ArrayToHex(answ));
         ilogger.get('revertAction').debug(currentPromise.name, answ);
-        opcodelogs(currentPromise.opcodelogs)
+        appendtxinfo({logs: currentPromise.opcodelogs, gas});
         currentPromise.reject(error);
         currentPromise.resolved = true;
         return ERROR.STOP;
@@ -481,7 +484,7 @@ const storeStateChanges = (ilogger, persistence) => (context) => {
 }
 
 const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...args) => {
-    const [name, input, output, cache, stack, changed, position] = args;
+    const [name, input, output, cache, stack, changed, position, gasCost] = args;
     const {context, logs, data} = cache;
     const clonedContext = cloneContext(context);
     const clonedLogs =  cloneLogs(logs);
@@ -491,7 +494,7 @@ const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...
         return val instanceof Uint8Array ? val : BN2uint8arr(val);
     }) : [];
 
-    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed, position: position || 0};
+    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed, position: position || 0, gasCost};
     callback(log);
 
     if (Logger.getLevel() === 'DEBUG') return log;
