@@ -99,7 +99,7 @@ const compileContracts = async () => {
     // Compile contracts
     let sol_names = await promisify(fs.readdir, SOL_PATH).catch(console.log);
     sol_names = sol_names.map(name => name.replace('.sol', ''));
-    for (name of sol_names) {
+    for (let name of sol_names) {
         await compileSol(name);
     }
 
@@ -108,14 +108,14 @@ const compileContracts = async () => {
     names = names.filter(n => n !== 'taylor');  // takes too much time
     // names = ['c11', 'c12']
 
-    for (name of names) {
+    for (let name of names) {
         contracts[name] = await compile(name);
         createBuild(name, contracts[name]);
         contracts[name].abi = abis[name];
     }
 
     // Compile to Evm
-    for (name of names) {
+    for (let name of names) {
         contracts[name].evm = (await compileEvm(name)).bin;
     }
     return contracts;

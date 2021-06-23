@@ -1,12 +1,12 @@
 const { randomHash, randomAddress, toBN, uint8ArrayToHex, hexToUint8Array } = require('./utils.js');
 
 const persistenceMock = (accounts = {}) => {
-    const emptyAccount = (address) =>  Object.assign({}, { address, balance: toBN(0)});
+    const emptyAccount = (address) =>  Object.assign({}, { address, balance: toBN(0), empty: true});
 
     // runtimeCode null - address not set / selfdestructed
     // runtimeCode.length === 0 - address set, not contract
 
-    const get = address => cloneContract(accounts[address] || {...emptyAccount(address), empty: true });
+    const get = address => cloneContract(accounts[address] || emptyAccount(address));
 
     const set = ({ address, runtimeCode, storage, balance = 0, removed }) => {
         // pathToWasm ?
@@ -20,6 +20,7 @@ const persistenceMock = (accounts = {}) => {
             runtimeCode,
             balance: toBN(balance),
             storage,
+            empty: false,
         };
         return address;
     }
@@ -37,6 +38,7 @@ const persistenceMock = (accounts = {}) => {
     const updateBalance = (address, total) => {
         if (!accounts[address]) accounts[address] = emptyAccount(address);
         accounts[address].balance = toBN(total);
+        accounts[address].empty = false;
     }
 
     const setBulk = (accounts = {}) => {
@@ -60,6 +62,7 @@ const blocks = (blocks = []) => {
 
     blocks.forEach(block => {
         blocksByHash[block.hash] = block.number;
+        count = block.number + 1;
     });
 
     const set = () => {

@@ -38,6 +38,9 @@ object "TestWasm3" {
             // getBlockDifficulty
             mstore(slotPtr(data_ptr, 6), difficulty())
 
+            // storageLoad
+            mstore(slotPtr(data_ptr, 7), sload(0))
+
             // storageStore
             sstore(0, address())
             // storageLoad

@@ -78,14 +78,18 @@ const isHexWasm = source => source.substring(0, 8) === '0061736d'
 const isBinWasm = uint8Array => uint8Array[0] === 0 && uint8Array[1] === 97 && uint8Array[2] === 115 && uint8Array[3] === 109;
 
 const uint8arrToBN = uint8arr => new BN(strip0x(uint8ArrayToHex(uint8arr)), 16);
+const BN2hex = n => n.toString(16).padStart(64, '0');
 const BN2uint8arr = n => {
-    const res = n.toString(16).padStart(64, '0');
+    const res = BN2hex(n);
     return hexToUint8Array(res);
 }
 const toBN = n => {
+    // from hex
     if (typeof n === 'string' && n.substring(0, 2) === '0x') {
         return new BN(n.substring(2), 16);
     }
+    // from ethers BigNumber
+    if (typeof n === 'object' && n._hex) return new BN(n._hex.substring(2), 16);
     if (n instanceof Uint8Array) return uint8arrToBN(n);
     if (BN.isBN(n)) return n;
     if (typeof n === 'bigint') return new BN(n.toString());
@@ -114,6 +118,7 @@ module.exports = {
     randomAddress,
     extractAddress,
     toBN,
+    BN2hex,
     BN2uint8arr,
     clone,
     keccak256,

@@ -8,7 +8,7 @@
 
 object "c12_92" {
     code {
-        mstore(64, memoryguard(128))
+        mstore(64, 128)
         if callvalue() { revert(0, 0) }
 
         constructor_c12_92()
@@ -83,12 +83,16 @@ object "c12_92" {
                 if slt(sub(dataEnd, headStart), 64) { revert(0, 0) }
 
                 {
+
                     let offset := 0
+
                     value0 := abi_decode_t_address(add(headStart, offset), dataEnd)
                 }
 
                 {
+
                     let offset := 32
+
                     value1 := abi_decode_t_address(add(headStart, offset), dataEnd)
                 }
 
@@ -98,12 +102,16 @@ object "c12_92" {
                 if slt(sub(dataEnd, headStart), 64) { revert(0, 0) }
 
                 {
+
                     let offset := 0
+
                     value0 := abi_decode_t_address(add(headStart, offset), dataEnd)
                 }
 
                 {
+
                     let offset := 32
+
                     value1 := abi_decode_t_uint256(add(headStart, offset), dataEnd)
                 }
 
@@ -113,17 +121,23 @@ object "c12_92" {
                 if slt(sub(dataEnd, headStart), 96) { revert(0, 0) }
 
                 {
+
                     let offset := 0
+
                     value0 := abi_decode_t_address(add(headStart, offset), dataEnd)
                 }
 
                 {
+
                     let offset := 32
+
                     value1 := abi_decode_t_uint256(add(headStart, offset), dataEnd)
                 }
 
                 {
+
                     let offset := 64
+
                     value2 := abi_decode_t_uint256(add(headStart, offset), dataEnd)
                 }
 
@@ -164,7 +178,7 @@ object "c12_92" {
                 memPtr := mload(64)
                 let newFreePtr := add(memPtr, size)
                 // protect against overflow
-                if or(gt(newFreePtr, 0xffffffffffffffff), lt(newFreePtr, memPtr)) { panic_error() }
+                if or(gt(newFreePtr, 0xffffffffffffffff), lt(newFreePtr, memPtr)) { panic_error_0x41() }
                 mstore(64, newFreePtr)
             }
 
@@ -322,8 +336,10 @@ object "c12_92" {
 
             }
 
-            function panic_error() {
-                invalid()
+            function panic_error_0x41() {
+                mstore(0, 35408467139433450592217433187231851964531694900788300625387963629091585785856)
+                mstore(4, 0x41)
+                revert(0, 0x24)
             }
 
             function require_helper(condition) {

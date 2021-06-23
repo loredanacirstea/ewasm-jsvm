@@ -25,10 +25,26 @@ function instance ({
     decodeOutput,
     encodeInput,
     entrypoint,
+    stateProvider,
 }) {
     // persistence = {accounts, logs, blocks}
     // Internal logger
     const ilogger = Logger.get(vmname);
+
+    const getResource = async (address, stateProvider) => {
+        let data = vmcore.persistence.accounts.get(address);
+        // Get account data from provider
+        if (data.empty && stateProvider) {
+            const runtimeCode = await stateProvider.getCode(address);
+            const balance = await stateProvider.getBalance(address);
+            data.runtimeCode = typeof runtimeCode === 'string' ? hexToUint8Array(runtimeCode) : runtimeCode;
+            data.balance = toBN(balance);
+
+            delete data.empty;
+            vmcore.persistence.accounts.set(data);
+        }
+        return data;
+    }
 
     const deploy = (bytecode, wabi) => async (...args) => {
         ilogger.debug('deploy', ...args);
@@ -42,9 +58,10 @@ function instance ({
         return instance;
     }
 
-    const runtime = (address, wabi) => {
+    const runtime = async (address, wabi) => {
         ilogger.debug('runtime', address);
-        const runtimeCode = vmcore.persistence.accounts.get(address).runtimeCode;
+        let account = await getResource(address, stateProvider);
+        const runtimeCode = account.runtimeCode;
         return initializeWrap(runtimeCode, wabi, address, true);
     }
 
@@ -84,22 +101,20 @@ function instance ({
             finishAction: _finishAction,
             revertAction: _revertAction,
         });
-        const _wrappedMainRaw = wrappedMainRaw({ilogger, persistence: vmcore.persistence, _startExecution, address, bytecode, getfname});
-        const _wrappedMain = wrappedMain(_wrappedMainRaw, getfname, wabi, bytecode);
+        const _wrappedMainRaw = await wrappedMainRaw({ilogger, persistence: vmcore.persistence, _startExecution, address, bytecode, getfname});
+        const _wrappedMain = await wrappedMain(_wrappedMainRaw, getfname, wabi, bytecode);
 
-        wrappedInstance.main = _wrappedMain();
-        wrappedInstance.mainRaw = _wrappedMainRaw();
+        wrappedInstance.main = await _wrappedMain();
+        wrappedInstance.mainRaw = await _wrappedMainRaw();
 
-        wabi.forEach(method => {
-            if (method.name === 'constructor') return;
+        for (let method of wabi) {
             if (method.type === 'fallback') {
-                wrappedInstance[method.name] = _wrappedMain();
-            } else {
+                wrappedInstance[method.name] = await _wrappedMain();
+            } else if (method.name !== 'constructor') {
                 const signature = ethers.utils.id(signatureFull(method)).substring(0, 10);
-                wrappedInstance[method.name] = _wrappedMain(signature, method);
+                wrappedInstance[method.name] = await _wrappedMain(signature, method);
             }
-        })
-
+        }
         return wrappedInstance;
     }
 
@@ -171,17 +186,18 @@ function instance ({
         return cache;
     }
 
-    const wrappedMainRaw = ({ilogger, persistence, _startExecution, address, bytecode, getfname}) => (fabi) => (txInfo, existingCache = {}) => new Promise((resolve, reject) => {
+    const wrappedMainRaw = ({ilogger, persistence, _startExecution, address, bytecode, getfname}) => (fabi) => (txInfo, existingCache = {}) => new Promise(async (resolve, reject) => {
         txInfo = {...txInfo};  // TODO immutable
         txInfo.to = txInfo.to || address;
 
         const cache = buildCache(existingCache);
         // If we have previous cache, we keep it
         if (!cache.context[txInfo.from]) {
-            cache.context[txInfo.from] = persistence.accounts.get(txInfo.from);
+            cache.context[txInfo.from] = await getResource(txInfo.from, stateProvider);
         }
+
         if (!cache.context[txInfo.to]) {
-            cache.context[txInfo.to] = persistence.accounts.get(txInfo.to);
+            cache.context[txInfo.to] = await getResource(txInfo.to, stateProvider);
         }
         // constructor TODO: check if constructor
         if (!cache.context[txInfo.to].runtimeCode) {
@@ -204,7 +220,7 @@ function instance ({
         currentPromise.txInfo.data = currentPromise.data;
         currentPromise.txInfo.to = address;
         if (!currentPromise.cache.context[txInfo.to]) {
-            currentPromise.cache.context[txInfo.to] = persistence.accounts.get(txInfo.to);
+            currentPromise.cache.context[txInfo.to] = await getResource(txInfo.to, stateProvider);
             currentPromise.cache.context[txInfo.to].empty = false;
         }
 
@@ -245,7 +261,7 @@ function instance ({
             const { index, newtx, context, logs } = currentPromise.interruptTxObj;
             ilogger.get('internalCallWrapContinue').debug(index);
 
-            const wmodule = await runtime(newtx.to, []);
+            const wmodule = await runtime(newtx.to, [], stateProvider);
             let result = {};
             currentPromise.cache.data[index] = newtx;
             try {
@@ -264,16 +280,32 @@ function instance ({
             __startExecution();
         }
 
-        const asyncResourceWrap = (account) => {
-            currentPromise.interruptResourceObj = {account};
+        const asyncResourceWrap = (account, storageKeys) => {
+            currentPromise.interruptResourceObj = {account, storageKeys};
             ilogger.debug('asyncResourceWrap');
         }
 
         const asyncResourceWrapContinue = async() => {
-            const data = persistence.accounts.get(currentPromise.interruptResourceObj.account);
+            const {account, storageKeys} = currentPromise.interruptResourceObj;
+            let data = await getResource(account, stateProvider);
+
+            // Get storage values if needed
+            if (storageKeys) {
+                for (let key of storageKeys) {
+                    let value;
+                    if (stateProvider) {
+                        value = await stateProvider.getStorageAt(account, key);
+                    }
+                    else {
+                        value = '0x0000000000000000000000000000000000000000000000000000000000000000';
+                    }
+                    data.storage[key] = hexToUint8Array(value);
+                }
+            }
+
             // We must delete this, to avoid requesting the resource over and over again
             delete data.empty;
-            currentPromise.cache.context[currentPromise.interruptResourceObj.account] = data;
+            currentPromise.cache.context[account] = data;
             ilogger.get('asyncResourceWrapContinue').debug(data.account, data.balance, Object.keys(currentPromise.cache.context));
             currentPromise.interruptResourceObj = {};
 
@@ -354,7 +386,7 @@ function instance ({
         instantiateModule(bytecode, importObj).then(async wmodule => {
             currentPromise.minstance = wmodule.instance;
             currentPromise.importObj = importObj; // near memory access
-            ologger.debug('--', [], [], getCache(), getMemory());
+            ologger.debug('--', [], [], getCache());
 
             // _NEAR constructor
             if (!wmodule.instance.exports[currentPromise.methodName]) {
@@ -429,18 +461,17 @@ const storeStateChanges = (ilogger, persistence) => (context) => {
 }
 
 const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...args) => {
-    const [name, input, output, cache, memory, stack] = args;
+    const [name, input, output, cache, stack, changed] = args;
     const {context, logs, data} = cache;
     const clonedContext = cloneContext(context);
     const clonedLogs =  cloneLogs(logs);
     const currentContext = clonedContext[address] || {};
-    clonedMemory = hexToUint8Array(uint8ArrayToHex(new Uint8Array(memory.buffer)));
     const clonedStack = stack ? stack.map(val => {
         // BN or array
         return val instanceof Uint8Array ? val : BN2uint8arr(val);
     }) : [];
 
-    const log = {name, input, output, memory: clonedMemory, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack};
+    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed};
     callback(log);
     // we return nothing, because we don't print anything;
     return;

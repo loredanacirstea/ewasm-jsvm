@@ -53,9 +53,23 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 throw new Error(ERROR.ASYNC_RESOURCE);
             }
             result.getStorage = (key) => {
-                return result.storage[key];
+                const value = result.storage[key];
+                if (typeof value === 'undefined') {
+                    Logger.get('jsvm').debug('asyncResourceWrap', account);
+                    asyncResourceWrap(account, [key]);
+                    // execution stops here
+                    throw new Error(ERROR.ASYNC_RESOURCE);
+                }
+                return value;
             }
             result.setStorage = (key, value) => {
+                const oldvalue = result.storage[key];
+                if (typeof oldvalue === 'undefined') {
+                    Logger.get('jsvm').debug('asyncResourceWrap', account);
+                    asyncResourceWrap(account, [key]);
+                    // execution stops here
+                    throw new Error(ERROR.ASYNC_RESOURCE);
+                }
                 result.storage[key] = value;
                 persistenceWrap.set(result);
             }
@@ -68,7 +82,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             transferValue(persistenceWrap)(txInfo.from, txInfo.to, txInfo.value);
         }
 
-        let lastReturnData;
+        let lastReturnData = new Uint8Array(0);
 
         let gas = {
             limit: toBN(txObj.gasLimit || 4000000),
@@ -98,7 +112,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         }
 
         const getReturnData = () => lastReturnData;
-        const setReturnData = (data) => lastReturnData = data;
+        const setReturnData = (data) => lastReturnData = data || new Uint8Array(0);
 
         return internalCall(
             txInfo,
