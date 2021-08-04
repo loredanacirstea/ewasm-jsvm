@@ -20,6 +20,7 @@ const DEEFAULT_HANDLER = {
     INFO: (...args) => console.info(...args),
     WARN: (...args) => console.warn(...args),
     ERROR: (...args) => console.error(...args),
+    SILENT: () => {},
 }
 
 const globalLevel = LEVELS.ERROR;
@@ -62,6 +63,7 @@ const logg = (name, _level, _handler, filterExclude=[], filterInclude=[]) => {
         warn: handler(LEVELS.WARN),
         error: handler(LEVELS.ERROR),
         setLevel: (newlevel) => level = newlevel,
+        getLevel: () => level,
         spawn: (subname, sublevel, subhandler) => {
             loggers[subname] = logg(name + '_' + subname, sublevel || level, subhandler, filterInclude, filterExclude);
             return loggers[subname];

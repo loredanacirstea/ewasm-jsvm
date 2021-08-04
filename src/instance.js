@@ -122,7 +122,7 @@ function instance ({
 
     const _storeStateChanges = storeStateChanges(ilogger, vmcore.persistence);
 
-    const finishAction = (ilogger, persistence, address, wabi, opcodelogs) => currentPromise => answ => {
+    const finishAction = (ilogger, persistence, address, wabi, opcodelogs) => currentPromise => (answ, e) => {
         if (!currentPromise) {
             console.log('No queued promise found.'); // throw new Error('No queued promise found.');
             return;
@@ -139,13 +139,19 @@ function instance ({
         } else {
             const abi = wabi.find(abi => abi.name === currentPromise.name);
             ilogger.get('finishAction').debug(currentPromise.name, answ);
-            if (decodeOutput) result = decodeOutput(answ);
-            else result = answ && abi && abi.outputs ? decode(abi.outputs, answ) : answ;
+            if (decodeOutput && answ !== null) result = decodeOutput(answ);
+            else result = answ !== null && typeof answ !== 'undefined' && abi && abi.outputs ? decode(abi.outputs, answ) : answ;
         }
 
-        _storeStateChanges({accounts: currentPromise.cache.context, logs: currentPromise.cache.logs});
         opcodelogs(currentPromise.opcodelogs)
-        currentPromise.resolve(result);
+
+        if (!e) {
+            _storeStateChanges({accounts: currentPromise.cache.context, logs: currentPromise.cache.logs});
+            currentPromise.resolve(result);
+        }
+        else {
+            currentPromise.reject(e);
+        }
         currentPromise.resolved = true; // passed by reference
 
         // Needed for evm1 to stop execution
@@ -395,7 +401,7 @@ function instance ({
             revertAction(currentPromise),
             ologger,
         );
-        instantiateModule(bytecode, importObj).then(async wmodule => {
+        return instantiateModule(bytecode, importObj).then(async wmodule => {
             currentPromise.minstance = wmodule.instance;
             currentPromise.importObj = importObj; // near memory access
             ologger.debug('--', [], [], getCache());
@@ -426,7 +432,9 @@ function instance ({
                         // for return, revert, etc.
                         return;
                     default:
-                        throw e;
+                        // internal errors - throw error after logs are set
+                        finishAction(currentPromise)(null, e);
+                        return;
                 }
             }
 
@@ -485,7 +493,8 @@ const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...
 
     const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed};
     callback(log);
-    // we return nothing, because we don't print anything;
+
+    if (Logger.getLevel() === 'DEBUG') return log;
     return;
 });
 
