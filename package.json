@@ -1,6 +1,6 @@
 {
   "name": "ewasm-jsvm",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "\"ewasm virtual machine for javascript\"",
   "main": "src/index.js",
   "scripts": {
