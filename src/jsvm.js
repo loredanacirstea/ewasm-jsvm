@@ -55,8 +55,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             result.getStorage = (key) => {
                 const value = result.storage[key];
                 if (typeof value === 'undefined') {
-                    Logger.get('jsvm').debug('asyncResourceWrap', account);
-                    asyncResourceWrap(account, [key]);
+                    Logger.get('jsvm').debug('asyncResourceWrap', account, key);
+                    asyncResourceWrap(result, [key]);
                     // execution stops here
                     throw new Error(ERROR.ASYNC_RESOURCE);
                 }
@@ -65,8 +65,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             result.setStorage = (key, value) => {
                 const oldvalue = result.storage[key];
                 if (typeof oldvalue === 'undefined') {
-                    Logger.get('jsvm').debug('asyncResourceWrap', account);
-                    asyncResourceWrap(account, [key]);
+                    Logger.get('jsvm').debug('asyncResourceWrap', account, key);
+                    asyncResourceWrap(result, [key]);
                     // execution stops here
                     throw new Error(ERROR.ASYNC_RESOURCE);
                 }

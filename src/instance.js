@@ -17,6 +17,8 @@ const {
     cloneLogs,
 } = require('./persistence.js');
 
+const MAX_RECURSION_LIMIT = 10000;
+
 function instance ({
     vmname,
     vmcore,
@@ -230,6 +232,7 @@ function instance ({
         }, address);
         currentPromise.ologger.clear = () => currentPromise.opcodelogs = [];
         currentPromise.ologger.get = () => currentPromise.opcodelogs;
+        currentPromise.count = 0;
 
         const __startExecution = () => _startExecution({
             currentPromise,
@@ -282,12 +285,20 @@ function instance ({
 
         const asyncResourceWrap = (account, storageKeys) => {
             currentPromise.interruptResourceObj = {account, storageKeys};
+            currentPromise.count += 1;
             ilogger.debug('asyncResourceWrap');
         }
 
         const asyncResourceWrapContinue = async() => {
-            const {account, storageKeys} = currentPromise.interruptResourceObj;
-            let data = await getResource(account, stateProvider);
+            const {account: _account, storageKeys} = currentPromise.interruptResourceObj;
+            let data = _account;
+            let account = _account;
+            if (typeof _account === 'string') {
+                data = await getResource(_account, stateProvider);
+            }
+            else {
+                account = data.address;
+            }
 
             // Get storage values if needed
             if (storageKeys) {
@@ -308,6 +319,8 @@ function instance ({
             currentPromise.cache.context[account] = data;
             ilogger.get('asyncResourceWrapContinue').debug(data.account, data.balance, Object.keys(currentPromise.cache.context));
             currentPromise.interruptResourceObj = {};
+
+            if (currentPromise.count > MAX_RECURSION_LIMIT) throw new Error('Max recursion limit reached.');
 
             // restart execution from scratch with updated cache
             currentPromise.ologger.clear();
@@ -363,7 +376,6 @@ function instance ({
             if (!memoryMap) memoryMap = new WebAssembly.Memory({ initial: 2 }); // Size is in pages.
             return memoryMap;
         }
-
 
         const getMemory = () => {
             if (currentPromise.minstance) return currentPromise.minstance.exports.memory;
