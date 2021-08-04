@@ -420,7 +420,7 @@ const initializeImports = (
             const result = toBN(hash);
             stack.push(result);
             logger.debug('keccak256', [offset, length], [result], getCache(), stack);
-            return {stack, position: 0};
+            return {stack, position};
         },
         uint256Max: () => new BN('10000000000000000000000000000000000000000000000000000000000000000', 16),
         // mimick evm overflow
