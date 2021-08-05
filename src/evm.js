@@ -101,7 +101,8 @@ const initializeImports = (
         },
         callDataCopy: function (resultOffset, dataOffset, length, {stack, position}){
             const result = jsvm_env.callDataCopy(resultOffset, dataOffset, length);
-            logger.debug('CALLDATACOPY', [resultOffset, dataOffset, length], [result], getCache(), stack);
+            const changed = {memory: [resultOffset.toNumber(), result, 1]};
+            logger.debug('CALLDATACOPY', [resultOffset, dataOffset, length], [result], getCache(), stack, changed);
             return;
         },
         getCallDataSize: function ({stack, position}) {
@@ -113,7 +114,8 @@ const initializeImports = (
         callDataLoad: function(dataOffset, {stack, position}) {
             const result = toBN(jsvm_env.callDataLoad(dataOffset));
             stack.push(result);
-            logger.debug('CALLDATALOAD', [dataOffset], [result], getCache(), stack);
+            const changed = {memory: [dataOffset.toNumber(), result, 0]};
+            logger.debug('CALLDATALOAD', [dataOffset], [result], getCache(), stack, changed);
             return {stack, position};
         },
         // result i32 Returns 0 on success, 1 on failure and 2 on revert
@@ -223,8 +225,9 @@ const initializeImports = (
             return {stack, position};
         },
         codeCopy: function (resultOffset, codeOffset, length, {stack, position}) {
-            jsvm_env.codeCopy(resultOffset, codeOffset, length);
-            logger.debug('CODECOPY', [resultOffset, codeOffset, length], [], getCache(), stack);
+            const result = jsvm_env.codeCopy(resultOffset, codeOffset, length);
+            const changed = {memory: [resultOffset.toNumber(), result, 1]};
+            logger.debug('CODECOPY', [resultOffset, codeOffset, length], [], getCache(), stack, changed);
             return;
         },
         // returns i32 - code size current env
@@ -268,17 +271,18 @@ const initializeImports = (
             dataLength,
             {stack, position}
         ) {
-            jsvm_env.externalCodeCopy(
+            const result = jsvm_env.externalCodeCopy(
                 BN2uint8arr(address),
                 resultOffset,
                 codeOffset,
                 dataLength,
             )
+            const changed = {memory: [resultOffset.toNumber(), result, 1]};
             logger.debug('EXTCODECOPY', [address,
                 resultOffset,
                 codeOffset,
                 dataLength,
-            ], [], getCache(), stack);
+            ], [], getCache(), stack, changed);
             return;
         },
         // Returns extCodeSize i32
@@ -377,8 +381,9 @@ const initializeImports = (
             return {stack, position};
         },
         returnDataCopy: function (resultOffset, dataOffset, length, {stack, position}){
-            jsvm_env.returnDataCopy(resultOffset, dataOffset, length);
-            logger.debug('RETURNDATACOPY', [resultOffset, dataOffset, length], [], getCache(), stack);
+            const result = jsvm_env.returnDataCopy(resultOffset, dataOffset, length);
+            const changed = {memory: [resultOffset.toNumber(), result, 1]};
+            logger.debug('RETURNDATACOPY', [resultOffset, dataOffset, length], [], getCache(), stack, changed);
             return;
         },
         selfDestruct: function (address, {stack, position}){
