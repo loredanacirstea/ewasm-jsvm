@@ -539,6 +539,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     Logger.get('jsvm').get('externalCodeCopy').debug(address);
                     const codeSlice = persistence.get(address).runtimeCode.slice(codeOffset, codeOffset + dataLength);
                     storeMemory(codeSlice, resultOffset, dataLength);
+                    return codeSlice;
                 },
                 getExternalCodeHash: function(address) {
                     throw new Error('Not implemented');
@@ -601,12 +602,13 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     resultOffset = resultOffset.toNumber();
                     dataOffset = dataOffset.toNumber();
                     length = length.toNumber();
-
+                    const slice = getReturnData().slice(dataOffset, dataOffset + length);
                     storeMemory(
-                        getReturnData().slice(dataOffset, dataOffset + length),
+                        slice,
                         resultOffset,
                         length,
                     );
+                    return slice;
                 },
                 selfDestruct: function (address) {
                     const toAddress = extractAddress(address);
