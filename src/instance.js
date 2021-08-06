@@ -491,7 +491,7 @@ const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...
         return val instanceof Uint8Array ? val : BN2uint8arr(val);
     }) : [];
 
-    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed, position: position - 1};
+    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed, position: position || 0};
     callback(log);
 
     if (Logger.getLevel() === 'DEBUG') return log;

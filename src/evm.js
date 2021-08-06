@@ -599,12 +599,13 @@ const initializeImports = (
             return {stack, position};
         },
         handlePush: (code, bytecode, {stack, position}) => {
+            const _position = position;
             const no = code - 0x60 + 1;
             const value = toBN(bytecode.slice(position, position + no));
             stack.push(value);
             position += no;
 
-            logger.debug('PUSH' + no + ' 0x' + value.toString(16).padStart(no*2, '0'), [value], [], getCache(), stack, undefined, position);
+            logger.debug('PUSH' + no + ' 0x' + value.toString(16).padStart(no*2, '0'), [value], [], getCache(), stack, undefined, _position);
             return {stack, position};
         },
         handleSwap: (code, {stack, position}) => {
@@ -633,9 +634,10 @@ const initializeImports = (
             return {stack, position: newpos};
         },
         jumpi: (newpos, condition, {stack, position}) => {
+            const _position = position;
             newpos = newpos.toNumber();
             if (condition.toNumber() === 1) position = newpos;
-            logger.debug('JUMPI', [condition, newpos], [], getCache(), stack, undefined, position);
+            logger.debug('JUMPI', [condition, newpos], [], getCache(), stack, undefined, _position);
             return {stack, position};
         },
         jumpdest:({stack, position}) => {
