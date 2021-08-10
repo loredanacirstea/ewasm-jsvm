@@ -5,4 +5,6 @@ const ERROR = {
     OUT_OF_GAS: 'Out of gas',
 }
 
-module.exports = {ERROR};
+const BASE_TX_COST = 21000;
+
+module.exports = {ERROR, BASE_TX_COST};

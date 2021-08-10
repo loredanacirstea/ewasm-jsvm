@@ -61,14 +61,22 @@ Object.keys(_opcodeCategories).forEach(key => {
     })
 });
 
-function getPrice (name) {
+function getPrice (name, options) {
     let price = 0;
     const stripped = name.replace(/\d/g, '');
     const category = opcodeCategories[name] || opcodeCategories[stripped];
-    // console.log('getPrice', name, stripped, opcodeCategories[name]);
     if (category) price += gasPrices[category].value;
+    else if (special[name]) price += special[name](options);
     else if (gasPrices['G'+name]) price += gasPrices['G'+name].value;
     return price;
+}
+
+const special = {
+    sstore: ({count, isZero, prevIsZero}) => {
+        if (prevIsZero && !isZero) return gasPrices.Gsset.value;
+        if (!prevIsZero && !isZero) return gasPrices.Gsreset.value;
+        return gasPrices.Rsclear.value;
+    },
 }
 
 module.exports = {

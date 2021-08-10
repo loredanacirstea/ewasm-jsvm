@@ -298,16 +298,16 @@ const initializeImports = (
                 logger.debug('getTxOrigin', [resultOffset_i32ptr_address], [address], getCache());
             },
             finish: function (dataOffset_i32ptr_bytes, dataLength_i32) {
-                const res = jsvm_env.finish(toBN(dataOffset_i32ptr_bytes), toBN(dataLength_i32));
-                logger.debug('finish', [dataOffset_i32ptr_bytes, dataLength_i32], [res], getCache());
-                finishAction(res);
+                const result = jsvm_env.finish(toBN(dataOffset_i32ptr_bytes), toBN(dataLength_i32));
+                logger.debug('finish', [dataOffset_i32ptr_bytes, dataLength_i32], [result], getCache());
+                finishAction({result});
                 throw new Error(ERROR.STOP);
             },
             revert: function (dataOffset_i32ptr_bytes, dataLength_i32) {
-                const res = jsvm_env.revert(toBN(dataOffset_i32ptr_bytes), toBN(dataLength_i32));
+                const result = jsvm_env.revert(toBN(dataOffset_i32ptr_bytes), toBN(dataLength_i32));
                 console.log('revert');
-                logger.debug('revert', [dataOffset_i32ptr_bytes, dataLength_i32], [res], getCache());
-                revertAction(res);
+                logger.debug('revert', [dataOffset_i32ptr_bytes, dataLength_i32], [result], getCache());
+                revertAction({result});
                 throw new Error(ERROR.STOP);
             },
             // result dataSize i32
@@ -324,7 +324,7 @@ const initializeImports = (
                 const address = readAddress(jsvm_env, toBN(addressOffset_i32ptr_address));
                 jsvm_env.selfDestruct(address);
                 logger.debug('selfDestruct', [addressOffset_i32ptr_address], [], getCache());
-                finishAction();
+                finishAction({result: null});
                 throw new Error(ERROR.STOP);
             },
             // result blockTimestamp i64,

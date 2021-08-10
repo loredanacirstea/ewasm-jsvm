@@ -1,5 +1,5 @@
 const { ethers } = require('ethers');
-const { ERROR } = require('./constants');
+const { ERROR, BASE_TX_COST } = require('./constants');
 const {Logger, logg} = require('./config');
 const {
     encodeWithSignature,
@@ -218,13 +218,13 @@ function instance ({
         // needed, otherwise it cycles;
         cache.context[txInfo.from].empty = false;
         cache.context[txInfo.to].empty = false;
+        txInfo.gasUsed = toBN(BASE_TX_COST);
 
         let currentPromise = {
             resolve, reject,
             name: getfname(fabi),
             methodName: entrypoint ? entrypoint(fabi) : 'main',
             txInfo,
-            gas: {limit: toBN(txInfo.gasLimit), price: toBN(txInfo.gasPrice), used: toBN(0)},
             data: typeof txInfo.data === 'string' ? hexToUint8Array(txInfo.data) : txInfo.data,
             cache
         };
@@ -436,7 +436,7 @@ function instance ({
                         return;
                     default:
                         // internal errors - throw error after logs are set
-                        finishAction(currentPromise)(null, e);
+                        finishAction(currentPromise)({result: null}, e);
                         return;
                 }
             }

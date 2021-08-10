@@ -39,7 +39,9 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         Logger.get('jsvm').get('tx').debug('call', txInfo);
 
         const cache = getCache();
-        const persistenceWrap = initPersistence(cache.context);
+        const clonedContext = cloneContext(cache.context);
+        // const clonedLogs = cloneLogs(getCache().logs);
+        const persistenceWrap = initPersistence(clonedContext);
         Logger.get('jsvm').get('persistenceWrap').debug(Object.keys(cache.context));
         persistenceWrap._get = persistenceWrap.get;
         persistenceWrap.get = function (account) {
@@ -56,7 +58,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 const value = result.storage[key];
                 if (typeof value === 'undefined') {
                     Logger.get('jsvm').debug('asyncResourceWrap', account, key);
-                    asyncResourceWrap(result, [key]);
+                    // original account, without current changes
+                    asyncResourceWrap(cache.context[account], [key]);
                     // execution stops here
                     throw new Error(ERROR.ASYNC_RESOURCE);
                 }
@@ -66,7 +69,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 const oldvalue = result.storage[key];
                 if (typeof oldvalue === 'undefined') {
                     Logger.get('jsvm').debug('asyncResourceWrap', account, key);
-                    asyncResourceWrap(result, [key]);
+                    // original account, without current changes
+                    asyncResourceWrap(cache.context[account], [key]);
                     // execution stops here
                     throw new Error(ERROR.ASYNC_RESOURCE);
                 }
@@ -87,7 +91,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         let gas = {
             limit: toBN(txObj.gasLimit || 4000000),
             price: toBN(txObj.gasPrice || 1),
-            used: toBN(0),
+            used: toBN(txInfo.gasUsed || 0),
         }
         const getGas = () => gas;
         const useGas = gasUnits => {
@@ -95,6 +99,21 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             if (gas.used.gt(gas.limit)) throw new Error(ERROR.OUT_OF_GAS);
         }
         txInfo.gas = gas;
+
+        const storageWrites = {};
+        const storageReads = {};
+        const storageRecords = {
+            write: (key) => {
+                if (!storageWrites[key]) storageWrites[key] = 0;
+                storageWrites[key] ++;
+                return storageWrites[key];
+            },
+            read: (key) => {
+                if (!storageReads[key]) storageReads[key] = 0;
+                storageReads[key] ++;
+                return storageReads[key];
+            },
+        }
 
         const block = blocks.set();
         let memoryMap;
@@ -129,6 +148,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             setReturnData,
             getCache,
             getMemory || getNewMemory,
+            storageRecords,
         );
     }
 
@@ -146,6 +166,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         setReturnData,
         getCache,
         getMemory,
+        storageRecords,
     ) => {
         let currentCacheIndex = 0;
         const storageMap = () => getInstance().storage;
@@ -174,6 +195,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         const vmapi = {
             // i32ptr is u128
             // 33 methods
+                storageRecords,
                 storeMemory: function (bytes, offset) {
                     Logger.get('jsvm').get('memory').debug('store', bytes, offset);
                     storeMemory(bytes, offset.toNumber(), 32);
