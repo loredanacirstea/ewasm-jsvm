@@ -484,7 +484,7 @@ const storeStateChanges = (ilogger, persistence) => (context) => {
 }
 
 const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...args) => {
-    const [name, input, output, cache, stack, changed, position, gasCost] = args;
+    const [name, input, output, cache, stack, changed, position, gasCost, addlGasCost] = args;
     const {context, logs, data} = cache;
     const clonedContext = cloneContext(context);
     const clonedLogs =  cloneLogs(logs);
@@ -494,7 +494,7 @@ const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...
         return val instanceof Uint8Array ? val : BN2uint8arr(val);
     }) : [];
 
-    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed, position: position || 0, gasCost};
+    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed, position: position || 0, gasCost, addlGasCost};
     callback(log);
 
     if (Logger.getLevel() === 'DEBUG') return log;

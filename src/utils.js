@@ -100,6 +100,17 @@ const clone = value => JSON.parse(JSON.stringify(value));
 
 const keccak256 = ethers.utils.keccak256;
 
+function divCeil(a, b) {
+    const div = a.div(b)
+    const mod = a.mod(b)
+
+    // Fast case - exact division
+    if (mod.isZero()) return div
+
+    // Round up
+    return div.isNeg() ? div.isubn(1) : div.iaddn(1)
+}
+
 module.exports = {
     strip0x,
     encodeWithSignature,
@@ -122,4 +133,5 @@ module.exports = {
     BN2uint8arr,
     clone,
     keccak256,
+    divCeil,
 }

@@ -1,3 +1,11 @@
+const {divCeil, toBN, BN2uint8arr} = require('./utils');
+const {ERROR} = require('./constants');
+const coefs = {
+    'quadCoeffDiv': {
+        "v": 512,
+        "d": "Divisor for the quadratic particle of the memory cost equation"
+    },
+}
 const _gasPrices = [
     ['Gzero',0,' Nothing paid for operations of the set Wzero.'],
     ['Gjumpdest',1,' Amount of gas to pay for a JUMPDEST operation.'],
@@ -65,14 +73,25 @@ function getPrice (name, options) {
     let price = 0;
     const stripped = name.replace(/\d/g, '');
     const category = opcodeCategories[name] || opcodeCategories[stripped];
-    if (category) price += gasPrices[category].value;
-    else if (special[name]) price += special[name](options);
+    if (special[name]) return special[name](options, category);
+    else if (category) price += gasPrices[category].value;
     else if (gasPrices['G'+name]) price += gasPrices['G'+name].value;
     return price;
 }
 
 const special = {
-    sstore: ({count, isZero, prevIsZero}) => {
+    exp: ({exponent}) => {
+        let baseFee = toBN(gasPrices.Gexp.value);
+        const byteLength = exponent.byteLength();
+        if (byteLength < 1 || byteLength > 32) {
+            throw new Error(ERROR.OUT_OF_RANGE);
+        }
+        const addl = toBN(byteLength).muln(gasPrices.Gexpbyte.value);
+        return {baseFee, addl};
+    },
+    sstore: ({count, value, prevValue}) => {
+        const isZero = value.isZero();
+        const prevIsZero = prevValue.isZero();
         if (prevIsZero && !isZero) return gasPrices.Gsset.value;
         if (!prevIsZero && !isZero) return gasPrices.Gsreset.value;
         return gasPrices.Rsclear.value;

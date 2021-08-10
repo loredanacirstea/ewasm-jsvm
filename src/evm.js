@@ -232,7 +232,7 @@ const initializeImports = (
             const key = BN2uint8arr(pathOffset);
             const prevValue = toBN(jsvm_env.storageLoad(key));
             const count = jsvm_env.storageRecords.write(key);
-            const gasCost = getPrice('sstore', {count, isZero: value.isZero(), prevIsZero: prevValue.isZero()});
+            const gasCost = getPrice('sstore', {count, value, prevValue});
             jsvm_env.useGas(gasCost);
 
             jsvm_env.storageStore(key, BN2uint8arr(value));
@@ -591,12 +591,13 @@ const initializeImports = (
             return {stack, position};
         },
         exp: (a, b, {stack, position}) => {
-            const gasCost = getPrice('exp');
-            jsvm_env.useGas(gasCost);
+            const {baseFee, addl} = getPrice('exp', {exponent: b});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             if (b.lt(toBN(0))) return toBN(0);
             const result = a.pow(b);
             stack.push(result);
-            logger.debug('EXP', [a, b], [result], getCache(), stack, undefined, position, gasCost);
+            logger.debug('EXP', [a, b], [result], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         signextend: (size, value, {stack, position}) => {
