@@ -26,12 +26,25 @@ const initializeImports = (
 
     api.ethereum = {
         storeMemory: function (offset, bytes, {stack, position}) {
-            const gasCost = getPrice('mstore');
-            jsvm_env.useGas(gasCost);
             const value = BN2uint8arr(bytes);
+            const {
+                baseFee,
+                addl,
+                highestMemCost,
+                memoryWordCount
+            } = getPrice('mstore', {
+                offset,
+                length: toBN(value.length),
+                memWordCount: jsvm_env.memWordCount(),
+                highestMemCost: jsvm_env.highestMemCost(),
+            });
+            jsvm_env.useGas(baseFee);
+            if (addl) jsvm_env.useGas(addl);
+            if (highestMemCost) jsvm_env.setHighestMemCost(highestMemCost);
+            if (memoryWordCount) jsvm_env.setMemWordCount(memoryWordCount);
             jsvm_env.storeMemory(value, offset);
             const changed = {memory: [offset.toNumber(), value, 1]}
-            logger.debug('MSTORE', [bytes, offset], [], getCache(), stack, changed, position, gasCost);
+            logger.debug('MSTORE', [bytes, offset], [], getCache(), stack, changed, position, baseFee, addl);
             return;
         },
         storeMemory8: function (offset, bytes, {stack, position}) {
@@ -67,12 +80,13 @@ const initializeImports = (
         },
         // result is u128
         getExternalBalance: function (_address, {stack, position}){
-            const gasCost = getPrice('balance');
-            jsvm_env.useGas(gasCost);
+            const {baseFee, addl} = getPrice('balance');
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const address = BN2uint8arr(_address);
             const balance = toBN(jsvm_env.getExternalBalance(address));
             stack.push(balance);
-            logger.debug('BALANCE', [_address], [balance], getCache(), stack, undefined, position, gasCost);
+            logger.debug('BALANCE', [_address], [balance], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         // result i32 Returns 0 on success and 1 on failure
@@ -117,11 +131,25 @@ const initializeImports = (
             return {stack, position};
         },
         callDataCopy: function (resultOffset, dataOffset, length, {stack, position}) {
-            const gasCost = getPrice('calldatacopy');
-            jsvm_env.useGas(gasCost);
+            const {
+                baseFee,
+                addl,
+                highestMemCost,
+                memoryWordCount
+            } = getPrice('calldatacopy', {
+                offset: resultOffset,
+                length: toBN(length),
+                memWordCount: jsvm_env.memWordCount(),
+                highestMemCost: jsvm_env.highestMemCost(),
+            });
+            jsvm_env.useGas(baseFee);
+            if (addl) jsvm_env.useGas(addl);
+            if (highestMemCost) jsvm_env.setHighestMemCost(highestMemCost);
+            if (memoryWordCount) jsvm_env.setMemWordCount(memoryWordCount);
+
             const result = jsvm_env.callDataCopy(resultOffset, dataOffset, length);
             const changed = {memory: [resultOffset.toNumber(), result, 1]};
-            logger.debug('CALLDATACOPY', [resultOffset, dataOffset, length], [result], getCache(), stack, changed, position, gasCost);
+            logger.debug('CALLDATACOPY', [resultOffset, dataOffset, length], [result], getCache(), stack, changed, position, baseFee, addl);
             return;
         },
         getCallDataSize: function ({stack, position}) {
@@ -232,23 +260,26 @@ const initializeImports = (
             const key = BN2uint8arr(pathOffset);
             const prevValue = toBN(jsvm_env.storageLoad(key));
             const count = jsvm_env.storageRecords.write(key);
-            const gasCost = getPrice('sstore', {count, value, prevValue});
-            jsvm_env.useGas(gasCost);
-
+            const {baseFee, addl, refund} = getPrice('sstore', {count, value, prevValue});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
+            jsvm_env.refundGas(refund);
+            // console.log('----sstore gasCost', gasCost, BN2hex(value), BN2hex(prevValue));
             jsvm_env.storageStore(key, BN2uint8arr(value));
             const changed = {storage: [BN2hex(pathOffset), BN2hex(value), 1]}
-            logger.debug('SSTORE', [pathOffset, value], [], getCache(), stack, changed, position, gasCost);
+            logger.debug('SSTORE', [pathOffset, value], [], getCache(), stack, changed, position, baseFee, addl, refund);
             return;
         },
         storageLoad: function (pathOffset, {stack, position}) {
             const key = BN2uint8arr(pathOffset);
             const count = jsvm_env.storageRecords.read(key);
-            const gasCost = getPrice('sload', {count});
-            jsvm_env.useGas(gasCost);
+            const {baseFee, addl} = getPrice('sload');
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const result = toBN(jsvm_env.storageLoad(key));
             stack.push(result);
             const changed = {storage: [BN2hex(pathOffset), BN2hex(result), 0]}
-            logger.debug('SLOAD', [pathOffset], [result], getCache(), stack, changed, position, gasCost);
+            logger.debug('SLOAD', [pathOffset], [result], getCache(), stack, changed, position, baseFee, addl);
             return {stack, position};
         },
         getCaller: function ({stack, position}) {
@@ -268,11 +299,25 @@ const initializeImports = (
             return {stack, position};
         },
         codeCopy: function (resultOffset, codeOffset, length, {stack, position}) {
-            const gasCost = getPrice('codecopy');
-            jsvm_env.useGas(gasCost);
+            const {
+                baseFee,
+                addl,
+                highestMemCost,
+                memoryWordCount
+            } = getPrice('codecopy', {
+                offset: resultOffset,
+                length: toBN(length),
+                memWordCount: jsvm_env.memWordCount(),
+                highestMemCost: jsvm_env.highestMemCost(),
+            });
+            jsvm_env.useGas(baseFee);
+            if (addl) jsvm_env.useGas(addl);
+            if (highestMemCost) jsvm_env.setHighestMemCost(highestMemCost);
+            if (memoryWordCount) jsvm_env.setMemWordCount(memoryWordCount);
+
             const result = jsvm_env.codeCopy(resultOffset, codeOffset, length);
             const changed = {memory: [resultOffset.toNumber(), result, 1]};
-            logger.debug('CODECOPY', [resultOffset, codeOffset, length], [], getCache(), stack, changed, position, gasCost);
+            logger.debug('CODECOPY', [resultOffset, codeOffset, length], [], getCache(), stack, changed, position, baseFee, addl);
             return;
         },
         // returns i32 - code size current env
@@ -342,11 +387,12 @@ const initializeImports = (
         },
         // Returns extCodeSize i32
         getExternalCodeSize: function (address, {stack, position}) {
-            const gasCost = getPrice('extcodesize');
-            jsvm_env.useGas(gasCost);
+            const {baseFee, addl} = getPrice('extcodesize');
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const result = toBN(jsvm_env.getExternalCodeSize(BN2uint8arr(address)));
             stack.push(result);
-            logger.debug('EXTCODESIZE', [address], [result], getCache(), stack, undefined, position, gasCost);
+            logger.debug('EXTCODESIZE', [address], [result], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         // result gasLeft i64
@@ -455,11 +501,25 @@ const initializeImports = (
             return {stack, position};
         },
         returnDataCopy: function (resultOffset, dataOffset, length, {stack, position}) {
-            const gasCost = getPrice('returndatacopy');
-            jsvm_env.useGas(gasCost);
+            const {
+                baseFee,
+                addl,
+                highestMemCost,
+                memoryWordCount
+            } = getPrice('returndatacopy', {
+                offset: resultOffset,
+                length: toBN(length),
+                memWordCount: jsvm_env.memWordCount(),
+                highestMemCost: jsvm_env.highestMemCost(),
+            });
+            jsvm_env.useGas(baseFee);
+            if (addl) jsvm_env.useGas(addl);
+            if (highestMemCost) jsvm_env.setHighestMemCost(highestMemCost);
+            if (memoryWordCount) jsvm_env.setMemWordCount(memoryWordCount);
+
             const result = jsvm_env.returnDataCopy(resultOffset, dataOffset, length);
             const changed = {memory: [resultOffset.toNumber(), result, 1]};
-            logger.debug('RETURNDATACOPY', [resultOffset, dataOffset, length], [], getCache(), stack, changed, position, gasCost);
+            logger.debug('RETURNDATACOPY', [resultOffset, dataOffset, length], [], getCache(), stack, changed, position, baseFee, addl);
             return;
         },
         selfDestruct: function (address, {stack, position}) {
@@ -500,8 +560,9 @@ const initializeImports = (
             return api.ethereum.return(toBN(0), toBN(0), stack, undefined, position, gasCost);
         },
         keccak256: (offset, length, {stack, position}) => {
-            const gasCost = getPrice('keccak256');
-            jsvm_env.useGas(gasCost);
+            const {baseFee, addl} = getPrice('keccak256', {length});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const slots = Math.ceil(length.toNumber() / 32);
             const data = [...new Array(slots).keys()].map(index => {
                 const delta = toBN(index * 32);
@@ -512,7 +573,7 @@ const initializeImports = (
             const hash = keccak256(data);
             const result = toBN(hash);
             stack.push(result);
-            logger.debug('keccak256', [offset, length], [result], getCache(), stack, undefined, position, gasCost);
+            logger.debug('keccak256', [offset, length], [result], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         uint256Max: () => new BN('10000000000000000000000000000000000000000000000000000000000000000', 16),

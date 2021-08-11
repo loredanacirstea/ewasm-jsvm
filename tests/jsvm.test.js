@@ -2,8 +2,68 @@ const { ethers } = require('ethers');
 const { compileContracts } = require('./setup/setup');
 const { ewasmjsvm: _ewasmjsvm, evmjs: _evmjs } = require('../src/index.js');
 const utils = require('../src/utils.js');
-const { uint8ArrayToHex, strip0x } = require('../src/utils.js');
+const { uint8ArrayToHex, hexToUint8Array, strip0x } = require('../src/utils.js');
 const {Logger} = require('../src/config');
+const { BASE_TX_COST } = require('../src/constants');
+
+const { Chain, Hardfork, default: Common } = require('@ethereumjs/common');
+const VM = require('@ethereumjs/vm').default;
+
+const common = new Common({ chain: Chain.Mainnet, hardfork: Hardfork.Istanbul })
+const othervm = new VM({ common });
+
+async function getOtherVMResult (code, data) {
+    const steps = [];
+    othervm.on('step', function (data) {
+        steps.push({
+            name: data.opcode.name,
+            fee: data.opcode.fee,
+            pc: data.pc,
+            gasLeft: data.gasLeft,
+            gasRefund: data.gasRefund,
+            // data,
+        });
+    });
+    const results = await othervm.runCode({
+        code,
+        data: Buffer.from(data),
+        gasLimit: toBN(3000000),
+    });
+    return {results, steps};
+}
+
+expect.extend({
+    toBeSameGasCost(cost1, [cost2, message]) {
+      if (cost1 === cost2) {
+        return {
+          message: () => `same`,
+          pass: true
+        };
+      } else {
+        return {
+          message: () => message,
+          pass: false
+        };
+      }
+    }
+});
+
+function checkInstructionGas (logs, stepsOther) {
+    const INIGAS = 3000000;
+    let gasused = 0;
+    for (let i = 0; i < logs.length; i++) {
+        const gasCost = toBN(logs[i].gasCost).toNumber();
+        const addlGasCost = toBN(logs[i].addlGasCost).toNumber();
+        const refundedGas = toBN(logs[i].refundedGas).toNumber();
+        gasused += gasCost + addlGasCost - refundedGas;
+        const remaining = INIGAS - gasused;
+        const message1 = `${i} - ${logs[i].name}: ${logs[i].gasCost} + ${logs[i].addlGasCost} - ${logs[i].refundedGas}; - ${stepsOther[i].name}: ${stepsOther[i].fee}`;
+        expect(logs[i].gasCost.toString()).toBeSameGasCost([stepsOther[i].fee.toString(), message1]);
+        const message2 = `${i} - ${logs[i].name}: ${logs[i].gasCost} + ${logs[i].addlGasCost} - ${logs[i].refundedGas}; remaining ${remaining} - ${stepsOther[i].name}: ${stepsOther[i].fee}, gasRefund: ${stepsOther[i].gasRefund}, gasLeft: ${stepsOther[i].gasLeft}, gasLeft+1: ${stepsOther[i+1].gasLeft}`;
+
+        expect(remaining.toString()).toBeSameGasCost([stepsOther[i+1].gasLeft.toString(), message2]);
+    }
+}
 
 const ewasmjsvm = _ewasmjsvm();
 const evmjs = _evmjs();
@@ -31,7 +91,6 @@ const accounts = [
 
 // const exampleArr = [...new Array(count)].map(() => '0x' + [...new Array(size)].map((_, i) => (i+1).toString(16).padStart(2, '0')).join(''))
 
-
 it('test utils', async function () {
     let a;
     a = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
@@ -42,9 +101,14 @@ it('test utils', async function () {
 });
 
 it('test gascost 1', async function () {
-    const runtime = await evmjs.runtimeSim('6010600401', []);
+    const code = '6010600401';
+    const runtime = await evmjs.runtimeSim(code, []);
     await runtime.mainRaw({...DEFAULT_TX_INFO});
-    expect(runtime.gas.used.toNumber()).toBe(9);
+    expect(runtime.gas.used.toNumber()).toBe(21009);
+
+    const {results, steps} = await getOtherVMResult(hexToUint8Array(code));
+    checkInstructionGas(runtime.logs, steps);
+    expect(runtime.gas.used.toNumber()).toBe(results.gasUsed.toNumber() + BASE_TX_COST);
 });
 
 describe.each([

@@ -32,6 +32,7 @@ const c3 = [
         { name: 'calldata', type: 'address' },
         { name: 'extcodesize', type: 'uint' },
         { name: 'extcodecopy', type: 'bytes32' },
+        { name: 'multiv', type: 'uint' },
     ]},
 ]
 

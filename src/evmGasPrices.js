@@ -80,6 +80,14 @@ function getPrice (name, options) {
 }
 
 const special = {
+    balance: ({} = {}) => {
+        let baseFee = toBN(gasPrices.Gbalance.value);
+        return {baseFee};
+    },
+    sload: () => {
+        let baseFee = toBN(gasPrices.Gsload.value);
+        return {baseFee};
+    },
     exp: ({exponent}) => {
         let baseFee = toBN(gasPrices.Gexp.value);
         const byteLength = exponent.byteLength();
@@ -89,13 +97,84 @@ const special = {
         const addl = toBN(byteLength).muln(gasPrices.Gexpbyte.value);
         return {baseFee, addl};
     },
+    extcodesize: () => {
+        let addl = toBN(gasPrices.Gextcode.value);
+        return {baseFee: 0, addl};
+    },
     sstore: ({count, value, prevValue}) => {
         const isZero = value.isZero();
         const prevIsZero = prevValue.isZero();
-        if (prevIsZero && !isZero) return gasPrices.Gsset.value;
-        if (!prevIsZero && !isZero) return gasPrices.Gsreset.value;
-        return gasPrices.Rsclear.value;
+        let addl = 0, refund = 0;
+        if (prevIsZero && !isZero) addl = gasPrices.Gsset.value;
+        else if (!prevIsZero && !isZero) addl = gasPrices.Gsreset.value;
+        else refund = gasPrices.Rsclear.value;
+        return {baseFee: 0, addl, refund};
     },
+    mstore: ({offset, length, memWordCount, highestMemCost}) => {
+        let baseFee = toBN(gasPrices.Gverylow.value);
+        const changed = subMemUsage({offset, length, memWordCount, highestMemCost});
+        changed.baseFee = baseFee;
+        return changed;
+    },
+    calldatacopy: ({offset, length, memWordCount, highestMemCost}) => {
+        const changed = subMemUsage({offset, length, memWordCount, highestMemCost});
+        changed.baseFee = toBN(gasPrices.Gverylow.value);
+
+        if (!length.eqn(0)) {
+            addl = toBN(gasPrices.Gcopy.value).imul(divCeil(length, toBN(32)));
+            changed.addl = changed.addl.add(addl);
+        }
+        return changed;
+    },
+    codecopy: ({offset, length, memWordCount, highestMemCost}) => {
+        const changed = subMemUsage({offset, length, memWordCount, highestMemCost});
+        changed.baseFee = toBN(gasPrices.Gverylow.value);
+
+        if (!length.eqn(0)) {
+            addl = toBN(gasPrices.Gcopy.value).imul(divCeil(length, toBN(32)));
+            changed.addl = changed.addl.add(addl);
+        }
+        return changed;
+    },
+    returndatacopy: ({offset, length, memWordCount, highestMemCost}) => {
+        const changed = subMemUsage({offset, length, memWordCount, highestMemCost});
+        changed.baseFee = toBN(gasPrices.Gverylow.value);
+
+        if (!length.eqn(0)) {
+            addl = toBN(gasPrices.Gcopy.value).imul(divCeil(length, toBN(32)));
+            changed.addl = changed.addl.add(addl);
+        }
+        return changed;
+    },
+    keccak256: ({length}) => {
+        const baseFee = toBN(gasPrices.Gsha3.value);
+        let addl = toBN(gasPrices.Gsha3word.value).mul(divCeil(length, toBN(32)));
+        return {baseFee, addl};
+    },
+}
+
+function subMemUsage ({offset, length, memWordCount, highestMemCost}) {
+    // YP (225): access with zero length will not extend the memory
+    if (length.isZero()) return {};
+
+    const wordFee = toBN(gasPrices.Gmemory.value);
+    const newMemoryWordCount = divCeil(offset.add(length), toBN(32))
+
+    if (newMemoryWordCount.lte(memWordCount)) return {};
+
+    const changes = {};
+    const words = newMemoryWordCount;
+    const quadCoeff = toBN(coefs.quadCoeffDiv.v);
+    // words * 3 + words ^2 / 512
+    const subMemUsage = words.mul(wordFee).add(words.mul(words).div(quadCoeff));
+
+    if (subMemUsage.gt(highestMemCost)) {
+        changes.addl = subMemUsage.sub(highestMemCost);
+        changes.highestMemCost = subMemUsage;
+    }
+
+    changes.memoryWordCount = newMemoryWordCount;
+    return changes;
 }
 
 module.exports = {

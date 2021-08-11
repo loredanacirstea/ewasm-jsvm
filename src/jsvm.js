@@ -94,8 +94,9 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             used: toBN(txInfo.gasUsed || 0),
         }
         const getGas = () => gas;
-        const useGas = gasUnits => {
-            gas.used = gas.used.add(toBN(gasUnits));
+        const useGas = (gasUnits, addGas = true) => {
+            if (addGas) gas.used = gas.used.add(toBN(gasUnits));
+            else gas.used = gas.used.sub(toBN(gasUnits));
             if (gas.used.gt(gas.limit)) throw new Error(ERROR.OUT_OF_GAS);
         }
         txInfo.gas = gas;
@@ -169,6 +170,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         storageRecords,
     ) => {
         let currentCacheIndex = 0;
+        let wordCount = toBN(0);
+        let highestMemCost = toBN(0);
         const storageMap = () => getInstance().storage;
 
         const storeMemory = (bytes, offset, size) => {
@@ -196,6 +199,21 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             // i32ptr is u128
             // 33 methods
                 storageRecords,
+                memWordCount: function () {
+                    return wordCount;
+                },
+                highestMemCost: function () {
+                    return highestMemCost;
+                },
+                setMemWordCount: function (_wordCount) {
+                    wordCount = _wordCount;
+                },
+                setHighestMemCost: function (_highestMemCost) {
+                    highestMemCost = _highestMemCost;
+                },
+                getMSize: function () {
+                    return wordCount.mul(32);
+                },
                 storeMemory: function (bytes, offset) {
                     Logger.get('jsvm').get('memory').debug('store', bytes, offset);
                     storeMemory(bytes, offset.toNumber(), 32);
@@ -209,6 +227,9 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 },
                 useGas: function (amount) {
                     useGas(amount);
+                },
+                refundGas: function (amount) {
+                    useGas(amount, false);
                 },
                 getAddress: function () {
                     const size = 32;
@@ -652,11 +673,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 getBlockChainId: function () {
                     return toBN(99);
                 },
-                getMSize: function () {
-                    return (new Uint8Array(getMemory().buffer)).length;
-                },
                 stop: function() {
-                    return new Uint8Array(0);
+                    return toBN(0);
                 },
                 transferValue,
         }
