@@ -51,7 +51,7 @@ expect.extend({
 function checkInstructionGas (logs, stepsOther) {
     const INIGAS = 3000000;
     let gasused = 0;
-    for (let i = 0; i < logs.length; i++) {
+    for (let i = 0; i < logs.length - 1; i++) {
         const gasCost = toBN(logs[i].gasCost).toNumber();
         const addlGasCost = toBN(logs[i].addlGasCost).toNumber();
         const refundedGas = toBN(logs[i].refundedGas).toNumber();
@@ -175,6 +175,11 @@ describe.each([
         const answ = await runtime.main(address2, accounts[0].address, tx_info);
         const block = jsvm.getBlock('latest');
 
+        o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
+
         expect(answ.addr).toBe(checksum(runtime.address));
         expect(answ.caller).toBe(checksum(tx_info.from));
         // TODO
@@ -184,7 +189,7 @@ describe.each([
         expect(answ.origin).toBe(checksum(tx_info.from));
         expect(answ.difficulty.toNumber()).toBe(block.difficulty);
         expect(answ.stored_addr).toBe(checksum(runtime.address));
-        expect(answ.gas_left.toNumber()).toBe(998392);
+        expect(answ.gas_left.toNumber()).toBe(976234);
         expect(answ.blockhash).toBe(block.hash);
         // expect(answ.gaslimit.toNumber()).toBe(30000000); // ewasm 1000000
         expect(answ.gasprice.toNumber()).toBe(tx_info.gasPrice);
@@ -195,6 +200,7 @@ describe.each([
         expect(answ.calldata).toBe(checksum(address2));
         expect(answ.extcodesize.toNumber()).toBe(deployments.c2.bin.length);
         expect(answ.extcodecopy).toBe(utils.uint8ArrayToHex(deployments.c2.bin.slice(0, 32)).padEnd(66, '0'));
+        // expect(answ.multiv).toBe(0x040000);
     });
 
     it('test c4 revert', async function () {
@@ -210,6 +216,11 @@ describe.each([
         const runtime = await jsvm.deploy(contracts.c5[field], contracts.c5.abi)(DEFAULT_TX_INFO);
         deployments.c5 = runtime;
         await runtime.main(DEFAULT_TX_INFO);
+
+        let o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         const block = jsvm.getBlock('latest');
         const logs = jsvm.getLogs().getBlockLogs(block.number);

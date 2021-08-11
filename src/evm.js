@@ -258,13 +258,15 @@ const initializeImports = (
         },
         storageStore: function (pathOffset, value, {stack, position}) {
             const key = BN2uint8arr(pathOffset);
-            const prevValue = toBN(jsvm_env.storageLoad(key));
+            // TODO correct original value after EIP 2200
+            const origValue = toBN(jsvm_env.storageLoad(key));
+            const currentValue = toBN(jsvm_env.storageLoadOriginal(key));
             const count = jsvm_env.storageRecords.write(key);
-            const {baseFee, addl, refund} = getPrice('sstore', {count, value, prevValue});
+            const gasLeft = toBN(jsvm_env.getGasLeft());
+            const {baseFee, addl, refund} = getPrice('sstore', {count, value, currentValue, origValue, gasLeft});
             jsvm_env.useGas(baseFee);
             jsvm_env.useGas(addl);
             jsvm_env.refundGas(refund);
-            // console.log('----sstore gasCost', gasCost, BN2hex(value), BN2hex(prevValue));
             jsvm_env.storageStore(key, BN2uint8arr(value));
             const changed = {storage: [BN2hex(pathOffset), BN2hex(value), 1]}
             logger.debug('SSTORE', [pathOffset, value], [], getCache(), stack, changed, position, baseFee, addl, refund);
@@ -369,8 +371,22 @@ const initializeImports = (
             dataLength,
             {stack, position}
         ) {
-            const gasCost = getPrice('extcodecopy');
-            jsvm_env.useGas(gasCost);
+            const {
+                baseFee,
+                addl,
+                highestMemCost,
+                memoryWordCount
+            } = getPrice('extcodecopy', {
+                offset: resultOffset,
+                length: dataLength,
+                memWordCount: jsvm_env.memWordCount(),
+                highestMemCost: jsvm_env.highestMemCost(),
+            });
+            jsvm_env.useGas(baseFee);
+            if (addl) jsvm_env.useGas(addl);
+            if (highestMemCost) jsvm_env.setHighestMemCost(highestMemCost);
+            if (memoryWordCount) jsvm_env.setMemWordCount(memoryWordCount);
+
             const result = jsvm_env.externalCodeCopy(
                 BN2uint8arr(address),
                 resultOffset,
@@ -382,7 +398,7 @@ const initializeImports = (
                 resultOffset,
                 codeOffset,
                 dataLength,
-            ], [], getCache(), stack, changed, position, gasCost);
+            ], [], getCache(), stack, changed, position, baseFee, addl);
             return;
         },
         // Returns extCodeSize i32
@@ -426,10 +442,13 @@ const initializeImports = (
             dataLength,
             ...topics
         ) {
-            const gasCost = getPrice('log');
-            jsvm_env.useGas(gasCost);
             const {stack, position} = topics.pop();
             const numberOfTopics = topics.length;
+
+            const {baseFee, addl} = getPrice('log', {topics: toBN(topics.length), length: dataLength});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
+
             jsvm_env.log(
                 dataOffset,
                 dataLength,
@@ -440,7 +459,7 @@ const initializeImports = (
                 dataLength,
                 numberOfTopics,
                 ...topics
-            ], [], getCache(), stack, undefined, position, gasCost);
+            ], [], getCache(), stack, undefined, position, baseFee, addl);
             return;
         },
         log0: function(dataOffset, dataLength, ...topics) {

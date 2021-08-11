@@ -146,6 +146,7 @@ function instance ({
         appendtxinfo({
             logs: currentPromise.opcodelogs,
             gas: gas,
+            txInfo: currentPromise.txInfo,
         });
 
         if (!e) {
@@ -171,7 +172,11 @@ function instance ({
         }
         const error = new Error('Revert: ' + uint8ArrayToHex(answ));
         ilogger.get('revertAction').debug(currentPromise.name, answ);
-        appendtxinfo({logs: currentPromise.opcodelogs, gas});
+        appendtxinfo({
+            logs: currentPromise.opcodelogs,
+            gas,
+            txInfo: currentPromise.txInfo,
+        });
         currentPromise.reject(error);
         currentPromise.resolved = true;
         return ERROR.STOP;

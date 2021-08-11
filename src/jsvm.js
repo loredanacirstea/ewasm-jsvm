@@ -54,6 +54,17 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 // execution stops here
                 throw new Error(ERROR.ASYNC_RESOURCE);
             }
+            result.getStorageOriginal = (key) => {
+                const value = cache.context[account].storage[key];
+                if (typeof value === 'undefined') {
+                    Logger.get('jsvm').debug('asyncResourceWrap', account, key);
+                    // original account, without current changes
+                    asyncResourceWrap(cache.context[account], [key]);
+                    // execution stops here
+                    throw new Error(ERROR.ASYNC_RESOURCE);
+                }
+                return value;
+            }
             result.getStorage = (key) => {
                 const value = result.storage[key];
                 if (typeof value === 'undefined') {
@@ -194,6 +205,11 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             key = uint8ArrayToHex(key);
             return getInstance().getStorage(key) || hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
         }
+        const storageLoadOriginal = (key) => {
+            Logger.get('jsvm').get('storage').debug('loadOriginal', key);
+            key = uint8ArrayToHex(key);
+            return getInstance().getStorageOriginal(key) || hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
+        }
 
         const vmapi = {
             // i32ptr is u128
@@ -229,7 +245,9 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     useGas(amount);
                 },
                 refundGas: function (amount) {
-                    useGas(amount, false);
+                    // can be negative due to SSTORE EIP2200;
+                    if (toBN(amount).isNeg()) useGas(amount.abs());
+                    else useGas(amount, false);
                 },
                 getAddress: function () {
                     const size = 32;
@@ -507,6 +525,9 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 },
                 storageLoad: function (key_uint8array) {
                     return storageLoad(key_uint8array);
+                },
+                storageLoadOriginal: function (key_uint8array) {
+                    return storageLoadOriginal(key_uint8array);
                 },
                 getCaller: function () {
                     const size = 32;

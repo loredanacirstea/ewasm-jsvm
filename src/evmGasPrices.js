@@ -5,6 +5,42 @@ const coefs = {
         "v": 512,
         "d": "Divisor for the quadratic particle of the memory cost equation"
     },
+    "txDataNonZero": {
+        "v": 16,
+        "d": "Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions"
+    },
+    "sstoreSentryGasEIP2200": {
+        "v": 2300,
+        "d": "Minimum gas required to be present for an SSTORE call, not consumed"
+    },
+    "sstoreNoopGasEIP2200": {
+      "v": 800,
+      "d": "Once per SSTORE operation if the value doesn't change"
+    },
+    "sstoreDirtyGasEIP2200": {
+      "v": 800,
+      "d": "Once per SSTORE operation if a dirty value is changed"
+    },
+    "sstoreInitGasEIP2200": {
+      "v": 20000,
+      "d": "Once per SSTORE operation from clean zero to non-zero"
+    },
+    "sstoreInitRefundEIP2200": {
+      "v": 19200,
+      "d": "Once per SSTORE operation for resetting to the original zero value"
+    },
+    "sstoreCleanGasEIP2200": {
+      "v": 5000,
+      "d": "Once per SSTORE operation from clean non-zero to something else"
+    },
+    "sstoreCleanRefundEIP2200": {
+      "v": 4200,
+      "d": "Once per SSTORE operation for resetting to the original non-zero value"
+    },
+    "sstoreClearRefundEIP2200": {
+      "v": 15000,
+      "d": "Once per SSTORE operation for clearing an originally existing storage slot"
+    },
 }
 const _gasPrices = [
     ['Gzero',0,' Nothing paid for operations of the set Wzero.'],
@@ -80,6 +116,10 @@ function getPrice (name, options) {
 }
 
 const special = {
+    extcodesize: () => {
+        let baseFee = toBN(gasPrices.Gextcode.value);
+        return {baseFee};
+    },
     balance: ({} = {}) => {
         let baseFee = toBN(gasPrices.Gbalance.value);
         return {baseFee};
@@ -97,18 +137,40 @@ const special = {
         const addl = toBN(byteLength).muln(gasPrices.Gexpbyte.value);
         return {baseFee, addl};
     },
-    extcodesize: () => {
-        let addl = toBN(gasPrices.Gextcode.value);
-        return {baseFee: 0, addl};
-    },
-    sstore: ({count, value, prevValue}) => {
-        const isZero = value.isZero();
-        const prevIsZero = prevValue.isZero();
+    sstore: ({count, value, currentValue, origValue, gasLeft}) => {
+        const baseFee = 0;
         let addl = 0, refund = 0;
-        if (prevIsZero && !isZero) addl = gasPrices.Gsset.value;
-        else if (!prevIsZero && !isZero) addl = gasPrices.Gsreset.value;
-        else refund = gasPrices.Rsclear.value;
-        return {baseFee: 0, addl, refund};
+        // If gasleft is less than or equal to gas stipend, fail the current call frame with ‘out of gas’ exception.
+        if (gasLeft.ltn(coefs.sstoreSentryGasEIP2200.v)) throw new Error(ERROR.OUT_OF_GAS);
+
+        // If current value equals new value (this is a no-op), SLOAD_GAS is deducted.
+        if (value.eq(currentValue)) return {baseFee, addl: gasPrices.Gsload.value};
+
+        // If current value does not equal new value
+
+        // If original value equals current value
+        if (origValue.eq(value)) {
+            if (origValue.eqn(0)) {
+                return {baseFee, addl: gasPrices.Gsset.value};
+            }
+            addl += gasPrices.Gsreset.value;
+            if (value.eqn(0)) refund += gasPrices.Gsreset.value;
+            return {baseFee, addl, refund};
+        }
+        // If original value does not equal current value
+        addl += gasPrices.Gsload.value;
+
+        if (!origValue.eqn(0)) {
+            // remove refund that was previously awarded
+            if (currentValue.eq(0)) refund -= gasPrices.Gsreset.value;
+            if (value.eqn(0)) refund += gasPrices.Gsreset.value;
+        }
+        if (origValue.eq(value)) {
+            if (origValue.eqn(0)) refund += gasPrices.Gsset.value - gasPrices.Gsload.value;
+            else refund += gasPrices.Gsreset.value - Gsload.value;
+        }
+
+        return {baseFee, addl, refund};
     },
     mstore: ({offset, length, memWordCount, highestMemCost}) => {
         let baseFee = toBN(gasPrices.Gverylow.value);
@@ -146,21 +208,39 @@ const special = {
         }
         return changed;
     },
+    extcodecopy: ({offset, length, memWordCount, highestMemCost}) => {
+        const changed = subMemUsage({offset, length, memWordCount, highestMemCost});
+        changed.baseFee = toBN(gasPrices.Gextcode.value);
+
+        if (!length.eqn(0)) {
+            addl = toBN(gasPrices.Gcopy.value).imul(divCeil(length, toBN(32)));
+            changed.addl = changed.addl.add(addl);
+        }
+        return changed;
+    },
     keccak256: ({length}) => {
         const baseFee = toBN(gasPrices.Gsha3.value);
         let addl = toBN(gasPrices.Gsha3word.value).mul(divCeil(length, toBN(32)));
         return {baseFee, addl};
     },
+    log: ({length, topics}) => {
+        // log + logdata * bytesLength + logtopic * topics
+        const baseFee = toBN(gasPrices.Glog.value);
+        const addl = length.muln(gasPrices.Glogdata.value).add(
+            topics.muln(gasPrices.Glogtopic.value)
+        );
+        return {baseFee, addl};
+    }
 }
 
 function subMemUsage ({offset, length, memWordCount, highestMemCost}) {
     // YP (225): access with zero length will not extend the memory
-    if (length.isZero()) return {};
+    if (length.isZero()) return {baseFee: toBN(0), addl: toBN(0)};
 
     const wordFee = toBN(gasPrices.Gmemory.value);
     const newMemoryWordCount = divCeil(offset.add(length), toBN(32))
 
-    if (newMemoryWordCount.lte(memWordCount)) return {};
+    if (newMemoryWordCount.lte(memWordCount)) return {baseFee: toBN(0), addl: toBN(0)};
 
     const changes = {};
     const words = newMemoryWordCount;
@@ -172,7 +252,6 @@ function subMemUsage ({offset, length, memWordCount, highestMemCost}) {
         changes.addl = subMemUsage.sub(highestMemCost);
         changes.highestMemCost = subMemUsage;
     }
-
     changes.memoryWordCount = newMemoryWordCount;
     return changes;
 }
