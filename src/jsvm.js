@@ -161,6 +161,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             getCache,
             getMemory || getNewMemory,
             storageRecords,
+            () => clonedContext,
         );
     }
 
@@ -179,6 +180,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         getCache,
         getMemory,
         storageRecords,
+        getContext,
     ) => {
         let currentCacheIndex = 0;
         let wordCount = toBN(0);
@@ -215,6 +217,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             // i32ptr is u128
             // 33 methods
                 storageRecords,
+                getContext,
                 memWordCount: function () {
                     return wordCount;
                 },
@@ -321,6 +324,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                         origin: vmapi.getTxOrigin(),
                         data,
                         value,
+                        gasUsed: vmapi.getGas(),
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
@@ -380,6 +384,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                         origin: vmapi.getTxOrigin(),
                         data,
                         value,
+                        gasUsed: vmapi.getGas(),
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
@@ -444,6 +449,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                         origin: vmapi.getTxOrigin(),
                         data,
                         value: txObj.value,
+                        gasUsed: vmapi.getGas(),
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
@@ -496,6 +502,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                         origin: vmapi.getTxOrigin(),
                         data,
                         value: new Uint8Array(0),
+                        gasUsed: vmapi.getGas(),
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 

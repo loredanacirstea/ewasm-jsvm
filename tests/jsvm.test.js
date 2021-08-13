@@ -25,7 +25,7 @@ async function getOtherVMResult (code, data) {
         });
     });
     const results = await othervm.runCode({
-        code,
+        code: Buffer.from(code),
         data: Buffer.from(data),
         gasLimit: toBN(3000000),
     });
@@ -106,7 +106,7 @@ it('test gascost 1', async function () {
     await runtime.mainRaw({...DEFAULT_TX_INFO});
     expect(runtime.gas.used.toNumber()).toBe(21009);
 
-    const {results, steps} = await getOtherVMResult(hexToUint8Array(code));
+    const {results, steps} = await getOtherVMResult(hexToUint8Array(code), []);
     checkInstructionGas(runtime.logs, steps);
     expect(runtime.gas.used.toNumber()).toBe(results.gasUsed.toNumber() + BASE_TX_COST);
 });
@@ -257,6 +257,11 @@ describe.each([
 
         const answ = await runtime.main(accounts[0].address, DEFAULT_TX_INFO);
         expect(answ.balance).toBe(jsvm.getPersistence().get(accounts[0].address).balance.toNumber());
+
+        let o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
     });
 
     it('test c7 - create', async function () {
@@ -269,6 +274,11 @@ describe.each([
         const createdContract = jsvm.getPersistence().get(addr);
         expect(createdContract.balance.toString()).toBe(tx_info.value.toString());
         expect(createdContract.runtimeCode).not.toBeNull();
+
+        let o = await getOtherVMResult(runtime.bin, []);
+        // expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         const cinstance = await jsvm.runtimeSim(createdContract.runtimeCode, [contracts.c2.abi[1]], addr);
         const answ = await cinstance.main(DEFAULT_TX_INFO);
@@ -286,6 +296,11 @@ describe.each([
         const createdContract = jsvm.getPersistence().get(addr);
         expect(createdContract.balance.toString()).toBe(tx_info.value.toString());
         expect(createdContract.runtimeCode).not.toBeNull();
+
+        let o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         const cinstance = await jsvm.runtimeSim(createdContract.runtimeCode, [contracts.c2.abi[1]])
         const answ = await cinstance.main(DEFAULT_TX_INFO);
@@ -310,6 +325,11 @@ describe.each([
         expect(jsvm.getPersistence().get(tx_info.from).balance.toString()).toBe(fromBalance.toString());
         expect(jsvm.getPersistence().get(runtime.address).balance.toString()).toBe('0');
         expect(jsvm.getPersistence().get(runtime.address).runtimeCode).toBeUndefined();
+
+        let o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
     });
 
     const itnested = name === 'evmjs' ? it : it.skip;
@@ -322,29 +342,56 @@ describe.each([
 
         const answ = await runtime.main(deployments.c9_.address, deployments.c2.address, DEFAULT_TX_INFO);
         expect(answ[0]).toBe('0x00000000000000000000000000000000000000000000000000000000000f424900000000000000000000000000000000000000000000000000000000000f4249');
+
+        let o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
     });
 
     it('test c10 - simple functions', async function () {
+        let o;
         const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(DEFAULT_TX_INFO);
         deployments.c10 = runtime;
 
         let answ = await runtime.sum(8, 2, DEFAULT_TX_INFO);
         expect(answ.c.toNumber()).toBe(10);
+        o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         answ = await runtime.testAddress(runtime.address, DEFAULT_TX_INFO);
         expect(answ[0].toLowerCase()).toBe(runtime.address);
+        o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
+
 
         let value = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
         expect(value).toBe(5);
+        o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         let balance = jsvm.getPersistence().get(runtime.address).balance.toNumber();
 
         const newvalue = await runtime.addvalue(10, {...DEFAULT_TX_INFO, value: 40});
         value += 50;
         expect(newvalue[0].toNumber()).toBe(value);
+        o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         const val = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
         expect(val).toBe(value);
+        o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         const newbalance = jsvm.getPersistence().get(runtime.address).balance.toNumber();
         balance += 40;
@@ -363,16 +410,28 @@ describe.each([
         answ = await _runtime.test_staticcall(deployments.c10.address, 8, 2, DEFAULT_TX_INFO);
         expect(answ.c.toNumber()).toBe(10);
         expect(jsvm.getPersistence().get(deployments.c10.address).balance.toNumber()).toBe(balance);
+        let o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         answ = await _runtime.test_staticcall_address(deployments.c10.address, deployments.c10.address, DEFAULT_TX_INFO);
         expect(eBN2addr(answ.c)).toBe(deployments.c10.address);
         expect(jsvm.getPersistence().get(deployments.c10.address).balance.toNumber()).toBe(balance);
+        o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         await _runtime.test_call(deployments.c10.address, 10, {...DEFAULT_TX_INFO, value: 40});
         const val2 = (await deployments.c10.value({...DEFAULT_TX_INFO}))[0].toNumber();
         expect(val2).toBe(value + 10 + 40);
         // expect(jsvm.getPersistence().get(runtime.address).balance.toNumber()).toBe(balance + 40);
         // expect(jsvm.getPersistence().get(_runtime.address).balance.toNumber()).toBe(0);
+        o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
     }, 15000);
 
     it('test c10 revert', async function () {
@@ -393,6 +452,11 @@ describe.each([
         const runtime = await jsvm.deploy(contracts.c11[field], contracts.c2.abi)(DEFAULT_TX_INFO);
         let answ = await runtime.main( DEFAULT_TX_INFO);
         expect(answ.val.toNumber()).toBe(11);
+
+        let o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        expect(runtime.logs.length - 1).toBe(o.steps.length);
+        checkInstructionGas(runtime.logs.slice(1), o.steps);
+        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
     });
 
 });

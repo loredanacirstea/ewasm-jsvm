@@ -122,7 +122,7 @@ function instance ({
 
     const _storeStateChanges = storeStateChanges(ilogger, vmcore.persistence);
 
-    const finishAction = (ilogger, persistence, address, wabi, appendtxinfo) => currentPromise => ({result: answ, gas}, e) => {
+    const finishAction = (ilogger, persistence, address, wabi, appendtxinfo) => currentPromise => ({result: answ, gas, context}, e) => {
         if (!currentPromise) {
             console.log('No queued promise found.'); // throw new Error('No queued promise found.');
             return;
@@ -134,7 +134,7 @@ function instance ({
         let result;
         if (currentPromise.name === 'constructor') {
             // ilogger.get('finishAction_constructor').debug(currentPromise.name, answ);
-            currentPromise.cache.context[address].runtimeCode = answ;
+            context[address].runtimeCode = answ;
             result = address;
         } else {
             const abi = wabi.find(abi => abi.name === currentPromise.name);
@@ -150,7 +150,7 @@ function instance ({
         });
 
         if (!e) {
-            _storeStateChanges({accounts: currentPromise.cache.context, logs: currentPromise.cache.logs});
+            _storeStateChanges({accounts: context, logs: currentPromise.cache.logs});
             currentPromise.resolve(result);
         }
         else {
@@ -191,7 +191,7 @@ function instance ({
         cache.set = (index, obj) => cache.data[index] = obj;
         cache.getAndCheck = (index, txobj) => {
             const cachedtx = cache.get(index);
-            const hexdata = lowtx2hex(txobj)
+            const hexdata = lowtx2hex(txobj);
 
             if (!cachedtx || !cachedtx.result) return;
             Object.keys(cachedtx).forEach(key => {

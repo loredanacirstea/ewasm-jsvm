@@ -149,7 +149,7 @@ const special = {
         // If current value does not equal new value
 
         // If original value equals current value
-        if (origValue.eq(value)) {
+        if (origValue.eq(currentValue)) {
             if (origValue.eqn(0)) {
                 return {baseFee, addl: gasPrices.Gsset.value};
             }
@@ -230,7 +230,32 @@ const special = {
             topics.muln(gasPrices.Glogtopic.value)
         );
         return {baseFee, addl};
-    }
+    },
+    create: ({length}) => {
+        const baseFee = toBN(gasPrices.Gcreate.value);
+        const addl = length.muln(gasPrices.Gcodedeposit.value);
+        return {baseFee, addl};
+    },
+    call: ({value}) => {
+        const baseFee = toBN(gasPrices.Gcall.value);
+        let addl = toBN(0);
+        if (!value.eqn(0)) addl = addl.addn(gasPrices.Gcallvalue.value);
+        return {baseFee, addl};
+    },
+    callcode: ({value}) => {
+        const baseFee = toBN(gasPrices.Gcall.value);
+        let addl = toBN(0);
+        if (!value.eqn(0)) addl = addl.addn(gasPrices.Gcallvalue.value);
+        return {baseFee, addl};
+    },
+    staticcall: () => {
+        const baseFee = toBN(gasPrices.Gcall.value);
+        return {baseFee};
+    },
+    delegatecall: () => {
+        const baseFee = toBN(gasPrices.Gcall.value);
+        return {baseFee};
+    },
 }
 
 function subMemUsage ({offset, length, memWordCount, highestMemCost}) {

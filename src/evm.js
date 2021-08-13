@@ -109,8 +109,9 @@ const initializeImports = (
             outputLength,
             {stack, position}
         ) {
-            const gasCost = getPrice('call');
-            jsvm_env.useGas(gasCost);
+            const {baseFee, addl} = getPrice('call', {value});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const result = toBN(jsvm_env.call(
                 gas_limit,
                 BN2uint8arr(address),
@@ -127,7 +128,7 @@ const initializeImports = (
                 dataOffset,
                 dataLength,
                 outputOffset,
-                outputLength,], [result], getCache(), stack, undefined, position, gasCost);
+                outputLength,], [result], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         callDataCopy: function (resultOffset, dataOffset, length, {stack, position}) {
@@ -180,8 +181,9 @@ const initializeImports = (
             outputLength,
             {stack, position}
         ) {
-            const gasCost = getPrice('callcode');
-            jsvm_env.useGas(gasCost);
+            const {baseFee, addl} = getPrice('callcode', {value});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const result = toBN(jsvm_env.callCode(
                 gas_limit,
                 BN2uint8arr(address),
@@ -192,7 +194,7 @@ const initializeImports = (
                 outputLength
             ));
             stack.push(result);
-            logger.debug('CALLCODE', [gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32], [result], getCache(), stack, undefined, position, gasCost);
+            logger.debug('CALLCODE', [gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32], [result], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         // result i32 Returns 0 on success, 1 on failure and 2 on revert
@@ -205,8 +207,8 @@ const initializeImports = (
             outputLength,
             {stack, position}
         ) {
-            const gasCost = getPrice('delegatecall');
-            jsvm_env.useGas(gasCost);
+            const {baseFee} = getPrice('delegatecall');
+            jsvm_env.useGas(baseFee);
             const result = toBN(jsvm_env.callDelegate(
                 gas_limit_i64,
                 BN2uint8arr(address),
@@ -222,7 +224,7 @@ const initializeImports = (
                 dataOffset,
                 dataLength,
                 outputOffset,
-                outputLength], [result], getCache(), stack, undefined, position, gasCost
+                outputLength], [result], getCache(), stack, undefined, position, baseFee,
             );
             return {stack, position};
         },
@@ -236,8 +238,8 @@ const initializeImports = (
             outputLength,
             {stack, position}
         ) {
-            const gasCost = getPrice('staticcall');
-            jsvm_env.useGas(gasCost);
+            const {baseFee} = getPrice('staticcall');
+            jsvm_env.useGas(baseFee);
             const result = toBN(jsvm_env.callStatic(
                 gas_limit_i64,
                 BN2uint8arr(address),
@@ -253,7 +255,7 @@ const initializeImports = (
                 dataOffset,
                 dataLength,
                 outputOffset,
-                outputLength], [result], getCache(), stack, undefined, position, gasCost);
+                outputLength], [result], getCache(), stack, undefined, position, baseFee);
             return {stack, position};
         },
         storageStore: function (pathOffset, value, {stack, position}) {
@@ -346,14 +348,15 @@ const initializeImports = (
             dataLength,
             {stack, position}
         ) {
-            const gasCost = getPrice('create');
-            jsvm_env.useGas(gasCost);
+            const {baseFee, addl} = getPrice('create', {length: dataLength});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const address = toBN(jsvm_env.create(value, dataOffset, dataLength));
             stack.push(address);
             logger.debug('CREATE', [value,
                 dataOffset,
                 dataLength,
-            ], [address], getCache(), stack, undefined, position, gasCost);
+            ], [address], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         getBlockDifficulty: function ({stack, position}) {
@@ -499,7 +502,7 @@ const initializeImports = (
             jsvm_env.useGas(gasCost);
             const result = jsvm_env.finish(dataOffset, dataLength);
             logger.debug('FINISH', [dataOffset, dataLength], [result], getCache(), stack, undefined, position, gasCost);
-            finishAction({result, gas: jsvm_env.getGas()});
+            finishAction({result, gas: jsvm_env.getGas(), context: jsvm_env.getContext()});
             return {stack, position: 0};
         },
         revert: function (dataOffset, dataLength, {stack, position}) {
@@ -546,7 +549,7 @@ const initializeImports = (
             jsvm_env.useGas(gasCost);
             jsvm_env.selfDestruct(BN2uint8arr(address));
             logger.debug('SELFDESTRUCT', [address], [], getCache(), stack, undefined, position, gasCost);
-            finishAction({gas: jsvm_env.getGas()});
+            finishAction({gas: jsvm_env.getGas(), context: jsvm_env.getContext()});
             return {stack, position: 0};
         },
         getBlockTimestamp: function ({stack, position}) {
@@ -562,7 +565,7 @@ const initializeImports = (
             jsvm_env.useGas(gasCost);
             const result = jsvm_env.finish(offset, length);
             logger.debug('RETURN', [offset, length], [result], getCache(), stack, undefined, position, gasCost);
-            finishAction({result, gas: jsvm_env.getGas()});
+            finishAction({result, gas: jsvm_env.getGas(), context: jsvm_env.getContext()});
             return {stack, position: 0};
         },
         revert: (offset, length, {stack, position}) => {
