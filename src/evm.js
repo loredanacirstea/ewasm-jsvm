@@ -16,13 +16,14 @@ const initializeImports = (
     internalCallWrap,
     asyncResourceWrap,
     getMemory,
-    getCache,
+    _getCache,
     finishAction,
     revertAction,
     logger,
 ) => {
-    const jsvm_env = vmcore.call(txObj, internalCallWrap, asyncResourceWrap, getMemory, getCache);
+    const jsvm_env = vmcore.call(txObj, internalCallWrap, asyncResourceWrap, getMemory, _getCache);
     const api = {ethereum: {}};
+    const getCache = jsvm_env.getCache;
 
     api.ethereum = {
         storeMemory: function (offset, bytes, {stack, position}) {

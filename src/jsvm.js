@@ -26,21 +26,32 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         const fromBalance = persistenceApi.get(from).balance;
         const toBalance = persistenceApi.get(to).balance;
         Logger.get('jsvm').get('transferValue').debug('---', fromBalance.toString(), toBalance.toString(), parsedValue.toString());
-        if (fromBalance.lt(parsedValue)) throw new Error('Not enough balance.');
+
+        if (fromBalance.lt(parsedValue)) {
+            throw new Error('Not enough balance.');
+        }
 
         persistenceApi.updateBalance(to, toBalance.add(parsedValue));
         persistenceApi.updateBalance(from, fromBalance.sub(parsedValue));
     }
 
-    const call = (txObj, internalCallWrap, asyncResourceWrap, getMemory, getCache) => {
+    const callJsvm = (txObj, internalCallWrap, asyncResourceWrap, getMemory, _getCache) => {
         const txInfo = Object.assign({}, txObj);
         txInfo.origin = txInfo.from;
 
         Logger.get('jsvm').get('tx').debug('call', txInfo);
 
-        const cache = getCache();
+        const cache = _getCache();
         const clonedContext = cloneContext(cache.context);
-        // const clonedLogs = cloneLogs(getCache().logs);
+        const clonedLogs = cloneLogs(_getCache().logs);
+
+        const getCache = () => {
+            return {
+                context: clonedContext,
+                logs: clonedLogs,
+            }
+        }
+
         const persistenceWrap = initPersistence(clonedContext);
         Logger.get('jsvm').get('persistenceWrap').debug(Object.keys(cache.context));
         persistenceWrap._get = persistenceWrap.get;
@@ -218,6 +229,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             // 33 methods
                 storageRecords,
                 getContext,
+                getCache,
                 memWordCount: function () {
                     return wordCount;
                 },
@@ -715,7 +727,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         logs: chainlogs,
     }
 
-    return { persistence: wrappersist, call }
+    return { persistence: wrappersist, call: callJsvm }
 
 }
 

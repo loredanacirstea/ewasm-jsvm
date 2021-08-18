@@ -50,7 +50,9 @@ const logg = (name, _level, _handler, filterExclude=[], filterInclude=[]) => {
                 logged = _handler(...args);
                 if (!logged) return;
             }
-            if (!logged) logged = args.map(printval).join(', ');
+            if (!logged) {
+                logged = args.map(v => printval(v)).join(', ');
+            }
             DEEFAULT_HANDLER[lvl](name, logged);
             count += 1;
         }

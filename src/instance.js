@@ -34,9 +34,11 @@ function instance ({
     const ilogger = Logger.get(vmname);
 
     const getResource = async (address, stateProvider) => {
+        if (!address) throw new Error('getResource address missing');
         let data = vmcore.persistence.accounts.get(address);
         // Get account data from provider
         if (data.empty && stateProvider) {
+            ilogger.get('getResource').debug(address);
             const runtimeCode = await stateProvider.getCode(address);
             const balance = await stateProvider.getBalance(address);
             data.runtimeCode = typeof runtimeCode === 'string' ? hexToUint8Array(runtimeCode) : runtimeCode;
