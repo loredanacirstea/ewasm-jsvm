@@ -109,9 +109,11 @@ function getPrice (name, options) {
     let price = 0;
     const stripped = name.replace(/\d/g, '');
     const category = opcodeCategories[name] || opcodeCategories[stripped];
-    if (special[name]) return special[name](options, category);
+    if (special[name]) price = special[name](options, category);
     else if (category) price += gasPrices[category].value;
     else if (gasPrices['G'+name]) price += gasPrices['G'+name].value;
+
+    if (typeof price === 'number') price = toBN(price);
     return price;
 }
 

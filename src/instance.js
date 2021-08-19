@@ -491,7 +491,7 @@ const storeStateChanges = (ilogger, persistence) => (context) => {
 }
 
 const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...args) => {
-    const [name, input, output, cache, stack, changed, position, gasCost, addlGasCost = 0, refundedGas = 0] = args;
+    const [name, input, output, cache, stack, changed, position, gasCost, addlGasCost, refundedGas] = args;
     const {context, logs, data} = cache;
     const clonedContext = cloneContext(context);
     const clonedLogs =  cloneLogs(logs);

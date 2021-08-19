@@ -101,7 +101,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             }
             return result;
         }
-        const chainlogsWrap = initLogs(cache.logs);
+        const chainlogsWrap = initLogs(clonedLogs);
 
         // Transfer ether if any
         if (txInfo.value && !toBN(txInfo.value).isZero()) {
