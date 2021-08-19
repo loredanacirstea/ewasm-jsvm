@@ -167,7 +167,7 @@ const special = {
         }
         if (origValue.eq(value)) {
             if (origValue.eqn(0)) refund += gasPrices.Gsset.value - gasPrices.Gsload.value;
-            else refund += gasPrices.Gsreset.value - Gsload.value;
+            else refund += gasPrices.Gsreset.value - gasPrices.Gsload.value;
         }
 
         return {baseFee, addl, refund};
