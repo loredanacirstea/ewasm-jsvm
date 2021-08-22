@@ -134,7 +134,8 @@ const special = {
         let baseFee = toBN(gasPrices.Gexp.value);
         const byteLength = exponent.byteLength();
         if (byteLength < 1 || byteLength > 32) {
-            throw new Error(ERROR.OUT_OF_RANGE);
+            console.error('', byteLength, exponent.toString());
+            // throw new Error(ERROR.OUT_OF_RANGE);
         }
         const addl = toBN(byteLength).muln(gasPrices.Gexpbyte.value);
         return {baseFee, addl};

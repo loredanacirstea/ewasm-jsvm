@@ -119,7 +119,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         const useGas = (gasUnits, addGas = true) => {
             if (addGas) gas.used = gas.used.add(toBN(gasUnits));
             else gas.used = gas.used.sub(toBN(gasUnits));
-            if (gas.used.gt(gas.limit)) throw new Error(ERROR.OUT_OF_GAS);
+            if (gas.used.gt(gas.limit)) throw new Error(`${ERROR.OUT_OF_GAS}. Using ${gasUnits} - ${gas.used.toString()}/${gas.limit.toString()}`);
         }
         txInfo.gas = gas;
 
