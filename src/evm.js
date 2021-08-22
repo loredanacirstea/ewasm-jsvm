@@ -577,10 +577,14 @@ const initializeImports = (
             revertAction({result, gas: jsvm_env.getGas()});
             return {stack, position: 0};
         },
-        stop: ({stack, position}) => {
+        stop: (forced = true, {stack, position}) => {
             const gasCost = getPrice('stop');
             jsvm_env.useGas(gasCost);
-            return api.ethereum.return(toBN(0), toBN(0), stack, undefined, position, gasCost);
+            if (!forced) {
+                logger.debug('STOP', [], [], getCache(), stack, undefined, position, gasCost);
+            }
+            finishAction({gas: jsvm_env.getGas(), context: jsvm_env.getContext()});
+            return {stack, position: 0};
         },
         keccak256: (offset, length, {stack, position}) => {
             const {baseFee, addl} = getPrice('keccak256', {length});
@@ -913,11 +917,13 @@ const interpreter = async ({bytecode, importObj, stack = [], calldata=[], positi
 
 const interpretOpcode = async ({bytecode, stack, importObj, position}) => {
     let hexcode;
+    const args = [];
     if (bytecode[position]) {
         hexcode = bytecode[position].toString(16).padStart(2, '0');
     }
     else {
         hexcode = '00';
+        args.push(true);
     }
     position += 1;
     const code = parseInt(hexcode, 16);
@@ -933,7 +939,6 @@ const interpretOpcode = async ({bytecode, stack, importObj, position}) => {
     else throw new Error(invalidError);
 
     if (opcodeName && importObj[opcodeName]) {
-        const args = [];
         for (let i = 0; i < opcode.arity; i++) {
             args.push(stack.pop());
         }

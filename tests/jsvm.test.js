@@ -107,7 +107,8 @@ it('test gascost 1', async function () {
     expect(runtime.gas.used.toNumber()).toBe(21009);
 
     const {results, steps} = await getOtherVMResult(hexToUint8Array(code), []);
-    checkInstructionGas(runtime.logs, steps);
+    expect(runtime.logs.length - 1).toBe(steps.length);
+    checkInstructionGas(runtime.logs.slice(1), steps);
     expect(runtime.gas.used.toNumber()).toBe(results.gasUsed.toNumber() + BASE_TX_COST);
 });
 

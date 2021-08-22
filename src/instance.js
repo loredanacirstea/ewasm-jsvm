@@ -414,7 +414,7 @@ function instance ({
         return instantiateModule(bytecode, importObj).then(async wmodule => {
             currentPromise.minstance = wmodule.instance;
             currentPromise.importObj = importObj; // near memory access
-            ologger.debug('--', [], [], getCache());
+            ologger.debug('--', [], [], getCache(), undefined, undefined, undefined, toBN(0), toBN(0));
 
             // _NEAR constructor
             if (!wmodule.instance.exports[currentPromise.methodName]) {
