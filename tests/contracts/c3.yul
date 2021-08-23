@@ -13,6 +13,18 @@ object "TestWasm3" {
             // callDataCopy
             calldatacopy(_calldata, 0, calldatasize())
 
+            // add, exp
+            let _baseno := calldatasize()
+            let exp_1 := exp(_baseno, 3)
+            let exp_2 := exp(_baseno, 10000)
+            let multiv := add(exp_1, exp_2)
+            mstore(slotPtr(data_ptr, 19), multiv)
+
+            // keccak
+            mstore(0, 0x11)
+            mstore(32, 0x22)
+            mstore(slotPtr(data_ptr, 20), keccak256(0, 64))
+
             // getAddress
             let addr := address()
             mstore(data_ptr, addr)
@@ -83,7 +95,7 @@ object "TestWasm3" {
             // externalCodeCopy
             extcodecopy(addr2, slotPtr(data_ptr, 18), 0, 32)
 
-            return (data_ptr, slotOffset(19))
+            return (data_ptr, slotOffset(20))
 
             function slotOffset(count) -> offset {
                 offset := mul(count, 32)

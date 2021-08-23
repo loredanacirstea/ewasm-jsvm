@@ -6,6 +6,9 @@ const {
     BN2uint8arr,
     keccak256,
 }  = require('./utils.js');
+const evmgas = require('./evmGasPrices');
+const { ERROR } = require('./constants.js');
+const {getPrice} = evmgas;
 
 const initializeImports = (
     vmcore,
@@ -13,60 +16,87 @@ const initializeImports = (
     internalCallWrap,
     asyncResourceWrap,
     getMemory,
-    getCache,
+    _getCache,
     finishAction,
     revertAction,
     logger,
 ) => {
-    const jsvm_env = vmcore.call(txObj, internalCallWrap, asyncResourceWrap, getMemory, getCache);
+    const jsvm_env = vmcore.call(txObj, internalCallWrap, asyncResourceWrap, getMemory, _getCache);
     const api = {ethereum: {}};
+    const getCache = jsvm_env.getCache;
 
     api.ethereum = {
         storeMemory: function (offset, bytes, {stack, position}) {
             const value = BN2uint8arr(bytes);
+            const {
+                baseFee,
+                addl,
+                highestMemCost,
+                memoryWordCount
+            } = getPrice('mstore', {
+                offset,
+                length: toBN(value.length),
+                memWordCount: jsvm_env.memWordCount(),
+                highestMemCost: jsvm_env.highestMemCost(),
+            });
+            jsvm_env.useGas(baseFee);
+            if (addl) jsvm_env.useGas(addl);
+            if (highestMemCost) jsvm_env.setHighestMemCost(highestMemCost);
+            if (memoryWordCount) jsvm_env.setMemWordCount(memoryWordCount);
             jsvm_env.storeMemory(value, offset);
             const changed = {memory: [offset.toNumber(), value, 1]}
-            logger.debug('MSTORE', [bytes, offset], [], getCache(), stack, changed, position);
+            logger.debug('MSTORE', [bytes, offset], [], getCache(), stack, changed, position, baseFee, addl);
             return;
         },
-        storeMemory8: function (offset, bytes, {stack, position}){
+        storeMemory8: function (offset, bytes, {stack, position}) {
+            const gasCost = getPrice('mstore8');
+            jsvm_env.useGas(gasCost);
             const value = BN2uint8arr(bytes);
             jsvm_env.storeMemory8(value, offset);
             const changed = {memory: [offset.toNumber(), value, 1]}
-            logger.debug('MSTORE8', [bytes, offset], [], getCache(), stack, changed, position);
+            logger.debug('MSTORE8', [bytes, offset], [], getCache(), stack, changed, position, gasCost);
             return;
         },
         loadMemory: function (offset, {stack, position}){
+            const gasCost = getPrice('mload');
+            jsvm_env.useGas(gasCost);
             const result = toBN(jsvm_env.loadMemory(offset));
             stack.push(result);
             const changed = {memory: [offset.toNumber(), BN2hex(result), 0]}
-            logger.debug('MLOAD', [offset], [result], getCache(), stack, changed, position);
+            logger.debug('MLOAD', [offset], [result], getCache(), stack, changed, position, gasCost);
             return {stack, position};
         },
-        useGas: function (amount, {stack}){
+        useGas: function (amount) {
             jsvm_env.useGas(amount);
-            logger.debug('USEGAS', [amount], [], getCache(), stack, undefined, position);
+            logger.debug('USEGAS', [amount], [], getCache(), stack, undefined, position, 0);
             return;
         },
         getAddress: function ({stack, position}) {
+            const gasCost = getPrice('address');
+            jsvm_env.useGas(gasCost);
             const address = toBN(jsvm_env.getAddress());
             stack.push(address);
-            logger.debug('ADDRESS', [], [address], getCache(), stack, undefined, position);
+            logger.debug('ADDRESS', [], [address], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         // result is u128
         getExternalBalance: function (_address, {stack, position}){
+            const {baseFee, addl} = getPrice('balance');
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const address = BN2uint8arr(_address);
             const balance = toBN(jsvm_env.getExternalBalance(address));
             stack.push(balance);
-            logger.debug('BALANCE', [_address], [balance], getCache(), stack, undefined, position);
+            logger.debug('BALANCE', [_address], [balance], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         // result i32 Returns 0 on success and 1 on failure
-        getBlockHash: function (number, {stack, position}){
+        getBlockHash: function (number, {stack, position}) {
+            const gasCost = getPrice('blockhash');
+            jsvm_env.useGas(gasCost);
             const hash = toBN(jsvm_env.getBlockHash(number));
             stack.push(hash);
-            logger.debug('BLOCKHASH', [number], [hash], getCache(), stack, undefined, position);
+            logger.debug('BLOCKHASH', [number], [hash], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         // result i32 Returns 0 on success, 1 on failure and 2 on revert
@@ -80,6 +110,9 @@ const initializeImports = (
             outputLength,
             {stack, position}
         ) {
+            const {baseFee, addl} = getPrice('call', {value});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const result = toBN(jsvm_env.call(
                 gas_limit,
                 BN2uint8arr(address),
@@ -96,26 +129,46 @@ const initializeImports = (
                 dataOffset,
                 dataLength,
                 outputOffset,
-                outputLength,], [result], getCache(), stack, undefined, position);
+                outputLength,], [result], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
-        callDataCopy: function (resultOffset, dataOffset, length, {stack, position}){
+        callDataCopy: function (resultOffset, dataOffset, length, {stack, position}) {
+            const {
+                baseFee,
+                addl,
+                highestMemCost,
+                memoryWordCount
+            } = getPrice('calldatacopy', {
+                offset: resultOffset,
+                length: toBN(length),
+                memWordCount: jsvm_env.memWordCount(),
+                highestMemCost: jsvm_env.highestMemCost(),
+            });
+            jsvm_env.useGas(baseFee);
+            if (addl) jsvm_env.useGas(addl);
+            if (highestMemCost) jsvm_env.setHighestMemCost(highestMemCost);
+            if (memoryWordCount) jsvm_env.setMemWordCount(memoryWordCount);
+
             const result = jsvm_env.callDataCopy(resultOffset, dataOffset, length);
             const changed = {memory: [resultOffset.toNumber(), result, 1]};
-            logger.debug('CALLDATACOPY', [resultOffset, dataOffset, length], [result], getCache(), stack, changed, position);
+            logger.debug('CALLDATACOPY', [resultOffset, dataOffset, length], [result], getCache(), stack, changed, position, baseFee, addl);
             return;
         },
         getCallDataSize: function ({stack, position}) {
+            const gasCost = getPrice('calldatasize');
+            jsvm_env.useGas(gasCost);
             const result = toBN(jsvm_env.getCallDataSize());
             stack.push(result);
-            logger.debug('CALLDATASIZE', [], [result], getCache(), stack, undefined, position);
+            logger.debug('CALLDATASIZE', [], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         callDataLoad: function(dataOffset, {stack, position}) {
+            const gasCost = getPrice('calldataload');
+            jsvm_env.useGas(gasCost);
             const result = toBN(jsvm_env.callDataLoad(dataOffset));
             stack.push(result);
             const changed = {memory: [dataOffset.toNumber(), result, 0]};
-            logger.debug('CALLDATALOAD', [dataOffset], [result], getCache(), stack, changed, position);
+            logger.debug('CALLDATALOAD', [dataOffset], [result], getCache(), stack, changed, position, gasCost);
             return {stack, position};
         },
         // result i32 Returns 0 on success, 1 on failure and 2 on revert
@@ -129,6 +182,9 @@ const initializeImports = (
             outputLength,
             {stack, position}
         ) {
+            const {baseFee, addl} = getPrice('callcode', {value});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const result = toBN(jsvm_env.callCode(
                 gas_limit,
                 BN2uint8arr(address),
@@ -139,7 +195,7 @@ const initializeImports = (
                 outputLength
             ));
             stack.push(result);
-            logger.debug('CALLCODE', [gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32], [result], getCache(), stack, undefined, position);
+            logger.debug('CALLCODE', [gas_limit_i64, addressOffset_i32ptr_address, valueOffset_i32ptr_u128, dataOffset_i32ptr_bytes, dataLength_i32], [result], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         // result i32 Returns 0 on success, 1 on failure and 2 on revert
@@ -152,6 +208,8 @@ const initializeImports = (
             outputLength,
             {stack, position}
         ) {
+            const {baseFee} = getPrice('delegatecall');
+            jsvm_env.useGas(baseFee);
             const result = toBN(jsvm_env.callDelegate(
                 gas_limit_i64,
                 BN2uint8arr(address),
@@ -167,7 +225,7 @@ const initializeImports = (
                 dataOffset,
                 dataLength,
                 outputOffset,
-                outputLength], [result], getCache(), stack, undefined, position
+                outputLength], [result], getCache(), stack, undefined, position, baseFee,
             );
             return {stack, position};
         },
@@ -181,6 +239,8 @@ const initializeImports = (
             outputLength,
             {stack, position}
         ) {
+            const {baseFee} = getPrice('staticcall');
+            jsvm_env.useGas(baseFee);
             const result = toBN(jsvm_env.callStatic(
                 gas_limit_i64,
                 BN2uint8arr(address),
@@ -196,52 +256,91 @@ const initializeImports = (
                 dataOffset,
                 dataLength,
                 outputOffset,
-                outputLength], [result], getCache(), stack, undefined, position);
+                outputLength], [result], getCache(), stack, undefined, position, baseFee);
             return {stack, position};
         },
-        storageStore: function (pathOffset, value, {stack, position}){
-            jsvm_env.storageStore(BN2uint8arr(pathOffset), BN2uint8arr(value));
+        storageStore: function (pathOffset, value, {stack, position}) {
+            const key = BN2uint8arr(pathOffset);
+            // TODO correct original value after EIP 2200
+            const origValue = toBN(jsvm_env.storageLoad(key));
+            const currentValue = toBN(jsvm_env.storageLoadOriginal(key));
+            const count = jsvm_env.storageRecords.write(key);
+            const gasLeft = toBN(jsvm_env.getGasLeft());
+            const {baseFee, addl, refund} = getPrice('sstore', {count, value, currentValue, origValue, gasLeft});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
+            jsvm_env.refundGas(refund);
+            jsvm_env.storageStore(key, BN2uint8arr(value));
             const changed = {storage: [BN2hex(pathOffset), BN2hex(value), 1]}
-            logger.debug('SSTORE', [pathOffset, value], [], getCache(), stack, changed, position);
+            logger.debug('SSTORE', [pathOffset, value], [], getCache(), stack, changed, position, baseFee, addl, refund);
             return;
         },
-        storageLoad: function (pathOffset, {stack, position}){
-            const result = toBN(jsvm_env.storageLoad(BN2uint8arr(pathOffset)));
+        storageLoad: function (pathOffset, {stack, position}) {
+            const key = BN2uint8arr(pathOffset);
+            const count = jsvm_env.storageRecords.read(key);
+            const {baseFee, addl} = getPrice('sload');
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
+            const result = toBN(jsvm_env.storageLoad(key));
             stack.push(result);
             const changed = {storage: [BN2hex(pathOffset), BN2hex(result), 0]}
-            logger.debug('SLOAD', [pathOffset], [result], getCache(), stack, changed, position);
+            logger.debug('SLOAD', [pathOffset], [result], getCache(), stack, changed, position, baseFee, addl);
             return {stack, position};
         },
         getCaller: function ({stack, position}) {
+            const gasCost = getPrice('caller');
+            jsvm_env.useGas(gasCost);
             const address = toBN(jsvm_env.getCaller());
             stack.push(address);
-            logger.debug('CALLER', [], [address], getCache(), stack, undefined, position);
+            logger.debug('CALLER', [], [address], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         getCallValue: function ({stack, position}) {
+            const gasCost = getPrice('callvalue');
+            jsvm_env.useGas(gasCost);
             const value = toBN(jsvm_env.getCallValue());
             stack.push(value);
-            logger.debug('CALLVALUE', [], [value], getCache(), stack, undefined, position);
+            logger.debug('CALLVALUE', [], [value], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         codeCopy: function (resultOffset, codeOffset, length, {stack, position}) {
+            const {
+                baseFee,
+                addl,
+                highestMemCost,
+                memoryWordCount
+            } = getPrice('codecopy', {
+                offset: resultOffset,
+                length: toBN(length),
+                memWordCount: jsvm_env.memWordCount(),
+                highestMemCost: jsvm_env.highestMemCost(),
+            });
+            jsvm_env.useGas(baseFee);
+            if (addl) jsvm_env.useGas(addl);
+            if (highestMemCost) jsvm_env.setHighestMemCost(highestMemCost);
+            if (memoryWordCount) jsvm_env.setMemWordCount(memoryWordCount);
+
             const result = jsvm_env.codeCopy(resultOffset, codeOffset, length);
             const changed = {memory: [resultOffset.toNumber(), result, 1]};
-            logger.debug('CODECOPY', [resultOffset, codeOffset, length], [], getCache(), stack, changed, position);
+            logger.debug('CODECOPY', [resultOffset, codeOffset, length], [], getCache(), stack, changed, position, baseFee, addl);
             return;
         },
         // returns i32 - code size current env
         getCodeSize: function({stack, position}) {
+            const gasCost = getPrice('codesize');
+            jsvm_env.useGas(gasCost);
             const result = toBN(jsvm_env.getCodeSize());
             stack.push(result);
-            logger.debug('CODESIZE', [], [result], getCache(), stack, undefined, position);
+            logger.debug('CODESIZE', [], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         // block’s beneficiary address
         getBlockCoinbase: function({stack, position}) {
+            const gasCost = getPrice('coinbase');
+            jsvm_env.useGas(gasCost);
             const value = toBN(jsvm_env.getBlockCoinbase());
             stack.push(value);
-            logger.debug('COINBASE', [], [value], getCache(), stack, undefined, position);
+            logger.debug('COINBASE', [], [value], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         create: function (
@@ -250,18 +349,23 @@ const initializeImports = (
             dataLength,
             {stack, position}
         ) {
+            const {baseFee, addl} = getPrice('create', {length: dataLength});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const address = toBN(jsvm_env.create(value, dataOffset, dataLength));
             stack.push(address);
             logger.debug('CREATE', [value,
                 dataOffset,
                 dataLength,
-            ], [address], getCache(), stack, undefined, position);
+            ], [address], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         getBlockDifficulty: function ({stack, position}) {
+            const gasCost = getPrice('difficulty');
+            jsvm_env.useGas(gasCost);
             const value = toBN(jsvm_env.getBlockDifficulty());
             stack.push(value);
-            logger.debug('DIFFICULTY', [], [value], getCache(), stack, undefined, position);
+            logger.debug('DIFFICULTY', [], [value], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         externalCodeCopy: function (
@@ -271,6 +375,22 @@ const initializeImports = (
             dataLength,
             {stack, position}
         ) {
+            const {
+                baseFee,
+                addl,
+                highestMemCost,
+                memoryWordCount
+            } = getPrice('extcodecopy', {
+                offset: resultOffset,
+                length: dataLength,
+                memWordCount: jsvm_env.memWordCount(),
+                highestMemCost: jsvm_env.highestMemCost(),
+            });
+            jsvm_env.useGas(baseFee);
+            if (addl) jsvm_env.useGas(addl);
+            if (highestMemCost) jsvm_env.setHighestMemCost(highestMemCost);
+            if (memoryWordCount) jsvm_env.setMemWordCount(memoryWordCount);
+
             const result = jsvm_env.externalCodeCopy(
                 BN2uint8arr(address),
                 resultOffset,
@@ -282,34 +402,43 @@ const initializeImports = (
                 resultOffset,
                 codeOffset,
                 dataLength,
-            ], [], getCache(), stack, changed, position);
+            ], [], getCache(), stack, changed, position, baseFee, addl);
             return;
         },
         // Returns extCodeSize i32
-        getExternalCodeSize: function (address, {stack, position}){
+        getExternalCodeSize: function (address, {stack, position}) {
+            const {baseFee, addl} = getPrice('extcodesize');
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const result = toBN(jsvm_env.getExternalCodeSize(BN2uint8arr(address)));
             stack.push(result);
-            logger.debug('EXTCODESIZE', [address], [result], getCache(), stack, undefined, position);
+            logger.debug('EXTCODESIZE', [address], [result], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         // result gasLeft i64
         getGasLeft: function ({stack, position}) {
+            const gasCost = getPrice('gas');
+            jsvm_env.useGas(gasCost);
             const result = toBN(jsvm_env.getGasLeft());
             stack.push(result);
-            logger.debug('GAS', [], [result], getCache(), stack, undefined, position);
+            logger.debug('GAS', [], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         // result blockGasLimit i64
         getBlockGasLimit: function ({stack, position}) {
+            const gasCost = getPrice('gaslimit');
+            jsvm_env.useGas(gasCost);
             const result = toBN(jsvm_env.getBlockGasLimit());
             stack.push(result);
-            logger.debug('GASLIMIT', [], [result], getCache(), stack, undefined, position);
+            logger.debug('GASLIMIT', [], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         getTxGasPrice: function ({stack, position}) {
+            const gasCost = getPrice('gasprice');
+            jsvm_env.useGas(gasCost);
             const result = toBN(jsvm_env.getTxGasPrice());
             stack.push(result);
-            logger.debug('GASPRICE', [], [result], getCache(), stack, undefined, position);
+            logger.debug('GASPRICE', [], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         log: function (
@@ -319,6 +448,11 @@ const initializeImports = (
         ) {
             const {stack, position} = topics.pop();
             const numberOfTopics = topics.length;
+
+            const {baseFee, addl} = getPrice('log', {topics: toBN(topics.length), length: dataLength});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
+
             jsvm_env.log(
                 dataOffset,
                 dataLength,
@@ -329,7 +463,7 @@ const initializeImports = (
                 dataLength,
                 numberOfTopics,
                 ...topics
-            ], [], getCache(), stack, undefined, position);
+            ], [], getCache(), stack, undefined, position, baseFee, addl);
             return;
         },
         log0: function(dataOffset, dataLength, ...topics) {
@@ -349,71 +483,113 @@ const initializeImports = (
         },
         // result blockNumber i64
         getBlockNumber: function ({stack, position}) {
+            const gasCost = getPrice('number');
+            jsvm_env.useGas(gasCost);
             const result = toBN(jsvm_env.getBlockNumber());
             stack.push(result);
-            logger.debug('NUMBER', [], [result], getCache(), stack, undefined, position);
+            logger.debug('NUMBER', [], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         getTxOrigin: function ({stack, position}) {
+            const gasCost = getPrice('origin');
+            jsvm_env.useGas(gasCost);
             const address = toBN(jsvm_env.getTxOrigin());
             stack.push(address);
-            logger.debug('ORIGIN', [], [address], getCache(), stack, undefined, position);
+            logger.debug('ORIGIN', [], [address], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
-        finish: function (dataOffset, dataLength, {stack, position}){
-            const res = jsvm_env.finish(dataOffset, dataLength);
-            logger.debug('FINISH', [dataOffset, dataLength], [res], getCache(), stack, undefined, position);
-            finishAction(res);
+        finish: function (dataOffset, dataLength, {stack, position}) {
+            const gasCost = getPrice('return');
+            jsvm_env.useGas(gasCost);
+            const result = jsvm_env.finish(dataOffset, dataLength);
+            logger.debug('FINISH', [dataOffset, dataLength], [result], getCache(), stack, undefined, position, gasCost);
+            finishAction({result, gas: jsvm_env.getGas(), context: jsvm_env.getContext(), logs: jsvm_env.getLogs()});
             return {stack, position: 0};
         },
-        revert: function (dataOffset, dataLength, {stack, position}){
-            const res = jsvm_env.revert(dataOffset, dataLength);
-            console.log('revert');
-            logger.debug('REVERT', [dataOffset, dataLength], [res], getCache(), stack, undefined, position);
-            revertAction(res);
+        revert: function (dataOffset, dataLength, {stack, position}) {
+            const gasCost = getPrice('revert');
+            jsvm_env.useGas(gasCost);
+            const result = jsvm_env.revert(dataOffset, dataLength);
+            logger.debug('REVERT', [dataOffset, dataLength], [result], getCache(), stack, undefined, position, gasCost);
+            revertAction({result, gas: jsvm_env.getGas()});
             return {stack, position: 0};
         },
         // result dataSize i32
         getReturnDataSize: function ({stack, position}) {
+            const gasCost = getPrice('returndatasize');
+            jsvm_env.useGas(gasCost);
             const result = toBN(jsvm_env.getReturnDataSize());
             stack.push(result);
-            logger.debug('RETURNDATASIZE', [], [result], getCache(), stack, undefined, position);
+            logger.debug('RETURNDATASIZE', [], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
-        returnDataCopy: function (resultOffset, dataOffset, length, {stack, position}){
+        returnDataCopy: function (resultOffset, dataOffset, length, {stack, position}) {
+            const {
+                baseFee,
+                addl,
+                highestMemCost,
+                memoryWordCount
+            } = getPrice('returndatacopy', {
+                offset: resultOffset,
+                length: toBN(length),
+                memWordCount: jsvm_env.memWordCount(),
+                highestMemCost: jsvm_env.highestMemCost(),
+            });
+            jsvm_env.useGas(baseFee);
+            if (addl) jsvm_env.useGas(addl);
+            if (highestMemCost) jsvm_env.setHighestMemCost(highestMemCost);
+            if (memoryWordCount) jsvm_env.setMemWordCount(memoryWordCount);
+
             const result = jsvm_env.returnDataCopy(resultOffset, dataOffset, length);
             const changed = {memory: [resultOffset.toNumber(), result, 1]};
-            logger.debug('RETURNDATACOPY', [resultOffset, dataOffset, length], [], getCache(), stack, changed, position);
+            logger.debug('RETURNDATACOPY', [resultOffset, dataOffset, length], [], getCache(), stack, changed, position, baseFee, addl);
             return;
         },
-        selfDestruct: function (address, {stack, position}){
+        selfDestruct: function (address, {stack, position}) {
+            const gasCost = getPrice('selfdestruct');
+            jsvm_env.useGas(gasCost);
             jsvm_env.selfDestruct(BN2uint8arr(address));
-            logger.debug('SELFDESTRUCT', [address], [], getCache(), stack, undefined, position);
-            finishAction();
+            logger.debug('SELFDESTRUCT', [address], [], getCache(), stack, undefined, position, gasCost);
+            finishAction({gas: jsvm_env.getGas(), context: jsvm_env.getContext(), logs: jsvm_env.getLogs()});
             return {stack, position: 0};
         },
         getBlockTimestamp: function ({stack, position}) {
+            const gasCost = getPrice('timestamp');
+            jsvm_env.useGas(gasCost);
             const result = toBN(jsvm_env.getBlockTimestamp());
             stack.push(result);
-            logger.debug('TIMESTAMP', [], [result], getCache(), stack, undefined, position);
+            logger.debug('TIMESTAMP', [], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         return: (offset, length, {stack, position}) => {
+            const gasCost = getPrice('return');
+            jsvm_env.useGas(gasCost);
             const result = jsvm_env.finish(offset, length);
-            logger.debug('RETURN', [offset, length], [result], getCache(), stack, undefined, position);
-            finishAction(result);
+            logger.debug('RETURN', [offset, length], [result], getCache(), stack, undefined, position, gasCost);
+            finishAction({result, gas: jsvm_env.getGas(), context: jsvm_env.getContext(), logs: jsvm_env.getLogs()});
             return {stack, position: 0};
         },
         revert: (offset, length, {stack, position}) => {
+            const gasCost = getPrice('revert');
+            jsvm_env.useGas(gasCost);
             const result = jsvm_env.revert(offset, length);
-            logger.debug('REVERT', [offset, length], [result], getCache(), stack, undefined, position);
-            revertAction(result);
+            logger.debug('REVERT', [offset, length], [result], getCache(), stack, undefined, position, gasCost);
+            revertAction({result, gas: jsvm_env.getGas()});
             return {stack, position: 0};
         },
-        stop: ({stack, position}) => {
-            return api.ethereum.return(toBN(0), toBN(0), stack, undefined, position);
+        stop: (forced = true, {stack, position}) => {
+            const gasCost = getPrice('stop');
+            jsvm_env.useGas(gasCost);
+            if (!forced) {
+                logger.debug('STOP', [], [], getCache(), stack, undefined, position, gasCost);
+            }
+            finishAction({gas: jsvm_env.getGas(), context: jsvm_env.getContext(), logs: jsvm_env.getLogs()});
+            return {stack, position: 0};
         },
         keccak256: (offset, length, {stack, position}) => {
+            const {baseFee, addl} = getPrice('keccak256', {length});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             const slots = Math.ceil(length.toNumber() / 32);
             const data = [...new Array(slots).keys()].map(index => {
                 const delta = toBN(index * 32);
@@ -424,164 +600,215 @@ const initializeImports = (
             const hash = keccak256(data);
             const result = toBN(hash);
             stack.push(result);
-            logger.debug('keccak256', [offset, length], [result], getCache(), stack, undefined, position);
+            logger.debug('keccak256', [offset, length], [result], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         uint256Max: () => new BN('10000000000000000000000000000000000000000000000000000000000000000', 16),
         // mimick evm overflow
         add: (a, b, {stack, position}) => {
+            const gasCost = getPrice('add');
+            jsvm_env.useGas(gasCost);
             const result = a.add(b).mod(api.ethereum.uint256Max());
             stack.push(result);
-            logger.debug('ADD', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('ADD', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         mul: (a, b, {stack, position}) => {
+            const gasCost = getPrice('mul');
+            jsvm_env.useGas(gasCost);
             const result = a.mul(b).mod(api.ethereum.uint256Max());
             stack.push(result);
-            logger.debug('MUL', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('MUL', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         // mimick evm underflow
         sub: (a, b, {stack, position}) => {
+            const gasCost = getPrice('sub');
+            jsvm_env.useGas(gasCost);
             const result = a.sub(b).mod(api.ethereum.uint256Max());
             stack.push(result);
-            logger.debug('SUB', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('SUB', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         div: (a, b, {stack, position}) => {
+            const gasCost = getPrice('div');
+            jsvm_env.useGas(gasCost);
             const result = a.abs().div(b.abs());
             stack.push(result);
-            logger.debug('DIV', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('DIV', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         sdiv: (a, b, {stack, position}) => {
+            const gasCost = getPrice('sdiv');
+            jsvm_env.useGas(gasCost);
             const result = a.div(b);
             stack.push(result);
-            logger.debug('SDIV', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('SDIV', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         mod: (a, b, {stack, position}) => {
+            const gasCost = getPrice('mod');
+            jsvm_env.useGas(gasCost);
             const result = a.abs().mod(b.abs());
             stack.push(result);
-            logger.debug('MOD', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('MOD', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         smod: (a, b, {stack, position}) => {
+            const gasCost = getPrice('smod');
+            jsvm_env.useGas(gasCost);
             const result = a.mod(b);
             stack.push(result);
-            logger.debug('SMOD', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('SMOD', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         addmod: (a, b, c, {stack, position}) => {
+            const gasCost = getPrice('addmod');
+            jsvm_env.useGas(gasCost);
             const result = api.ethereum.mod(api.ethereum.add(a, b), c);
             stack.push(result);
-            logger.debug('ADDMOD', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('ADDMOD', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         mulmod: (a, b, c, {stack, position}) => {
+            const gasCost = getPrice('mulmod');
+            jsvm_env.useGas(gasCost);
             const result = api.ethereum.mod(api.ethereum.mul(a, b), c);
             stack.push(result);
-            logger.debug('MULMOD', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('MULMOD', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         exp: (a, b, {stack, position}) => {
+            const {baseFee, addl} = getPrice('exp', {exponent: b});
+            jsvm_env.useGas(baseFee);
+            jsvm_env.useGas(addl);
             if (b.lt(toBN(0))) return toBN(0);
             const result = a.pow(b);
             stack.push(result);
-            logger.debug('EXP', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('EXP', [a, b], [result], getCache(), stack, undefined, position, baseFee, addl);
             return {stack, position};
         },
         signextend: (size, value, {stack, position}) => {
+            const gasCost = getPrice('signextend');
+            jsvm_env.useGas(gasCost);
             const result = value;
             stack.push(result);
-            logger.debug('SIGNEXTEND', [size, value], [result], getCache(), stack, undefined, position);
+            logger.debug('SIGNEXTEND', [size, value], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         lt: (a, b, {stack, position}) => {
+            const gasCost = getPrice('lt');
+            jsvm_env.useGas(gasCost);
             let result = a.abs().lt(b.abs());
             result = toBN(result ? 1 : 0);
             stack.push(result);
-            logger.debug('LT', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('LT', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         gt: (a, b, {stack, position}) => {
+            const gasCost = getPrice('gt');
+            jsvm_env.useGas(gasCost);
             let result = a.abs().gt(b.abs());
             result = toBN(result ? 1 : 0);
             stack.push(result);
-            logger.debug('GT', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('GT', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         slt: (a, b, {stack, position}) => {
+            const gasCost = getPrice('slt');
+            jsvm_env.useGas(gasCost);
             let result = a.lt(b);
             result = toBN(result ? 1 : 0);
             stack.push(result);
-            logger.debug('SLT', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('SLT', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         sgt: (a, b, {stack, position}) => {
+            const gasCost = getPrice('sgt');
+            jsvm_env.useGas(gasCost);
             let result = a.gt(b);
             result = toBN(result ? 1 : 0);
             stack.push(result);
-            logger.debug('SGT', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('SGT', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         eq: (a, b, {stack, position}) => {
+            const gasCost = getPrice('eq');
+            jsvm_env.useGas(gasCost);
             let result = a.eq(b);
             result = toBN(result ? 1 : 0);
             stack.push(result);
-            logger.debug('EQ', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('EQ', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         iszero: (a, {stack, position}) => {
+            const gasCost = getPrice('iszero');
+            jsvm_env.useGas(gasCost);
             let result = a.isZero();
             result = toBN(result ? 1 : 0);
             stack.push(result);
-            logger.debug('ISZERO', [a], [result], getCache(), stack, undefined, position);
+            logger.debug('ISZERO', [a], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         and: (a, b, {stack, position}) => {
+            const gasCost = getPrice('and');
+            jsvm_env.useGas(gasCost);
             const result = a.and(b);
             stack.push(result);
-            logger.debug('AND', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('AND', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         or: (a, b, {stack, position}) => {
+            const gasCost = getPrice('or');
+            jsvm_env.useGas(gasCost);
             const result = a.or(b);
             stack.push(result);
-            logger.debug('OR', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('OR', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         xor: (a, b, {stack, position}) => {
+            const gasCost = getPrice('xor');
+            jsvm_env.useGas(gasCost);
             const result = a.xor(b);
             stack.push(result);
-            logger.debug('XOR', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('XOR', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         not: (a, {stack, position}) => {
+            const gasCost = getPrice('not');
+            jsvm_env.useGas(gasCost);
             const result = a.notn(256);
             stack.push(result);
-            logger.debug('NOT', [a], [result], getCache(), stack, undefined, position);
+            logger.debug('NOT', [a], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         byte: (nth, bb, {stack, position}) => {
+            const gasCost = getPrice('byte');
+            jsvm_env.useGas(gasCost);
             const result = toBN(BN2uint8arr(bb).slice(nth, nth + 1));
             stack.push(result);
-            logger.debug('BYTE', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('BYTE', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         shl: (a, b, {stack, position}) => {
+            const gasCost = getPrice('shl');
+            jsvm_env.useGas(gasCost);
             const result = b.shln(a.toNumber());
             stack.push(result);
-            logger.debug('SHL', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('SHL', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         shr: (a, b, {stack, position}) => {
+            const gasCost = getPrice('shr');
+            jsvm_env.useGas(gasCost);
             const result = b.shrn(a.toNumber());
             stack.push(result);
-            logger.debug('SHR', [a, b], [result], getCache(), stack, undefined, position);
+            logger.debug('SHR', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         sar: (nobits, value, {stack, position}) => {
+            const gasCost = getPrice('sar');
+            jsvm_env.useGas(gasCost);
             const _nobits = nobits.toNumber();
             let valueBase2;
             if (value.isNeg()) {
@@ -595,57 +822,69 @@ const initializeImports = (
             valueBase2 = valueBase2[0].repeat(_nobits) + valueBase2;
             const result = (new BN(valueBase2, 2)).fromTwos(256);
             stack.push(result);
-            logger.debug('SAR', [nobits, value], [result], getCache(), stack, undefined, position);
+            logger.debug('SAR', [nobits, value], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         handlePush: (code, bytecode, {stack, position}) => {
+            const gasCost = getPrice('push');
+            jsvm_env.useGas(gasCost);
             const _position = position;
             const no = code - 0x60 + 1;
             const value = toBN(bytecode.slice(position, position + no));
             stack.push(value);
             position += no;
-
-            logger.debug('PUSH' + no + ' 0x' + value.toString(16).padStart(no*2, '0'), [value], [], getCache(), stack, undefined, _position);
+            logger.debug('PUSH' + no + ' 0x' + value.toString(16).padStart(no*2, '0'), [value], [], getCache(), stack, undefined, _position, gasCost);
             return {stack, position};
         },
         handleSwap: (code, {stack, position}) => {
+            const gasCost = getPrice('swap');
+            jsvm_env.useGas(gasCost);
             const no = code - 0x90 + 1;
             if (no >= stack.length) throw new Error(`Invalid SWAP${no} ; stack: ${stack}`);
             const last = stack.pop();
             const spliced = stack.splice(stack.length - no, 1, last);
             stack.push(spliced[0]);
 
-            logger.debug('SWAP' + no, [], [], getCache(), stack, undefined, position);
+            logger.debug('SWAP' + no, [], [], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         handleDup: (code, {stack, position}) => {
+            const gasCost = getPrice('dup');
+            jsvm_env.useGas(gasCost);
             const no = code - 0x80 + 1;
             if (no > stack.length) throw new Error(`Invalid DUP${no} ; stack: ${stack}`);
             const value = stack[stack.length - no];
             stack.push(value);
-
-            logger.debug('DUP' + no, [], [], getCache(), stack, undefined, position);
+            logger.debug('DUP' + no, [], [], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         jump: (newpos, {stack, position}) => {
+            const gasCost = getPrice('jump');
+            jsvm_env.useGas(gasCost);
             if (!newpos && newpos !== 0) throw new Error(`Invalid JUMP ${newpos}`);
             newpos = newpos.toNumber();
-            logger.debug('JUMP', [newpos], [], getCache(), stack, undefined, position);
+            logger.debug('JUMP', [newpos], [], getCache(), stack, undefined, position, gasCost);
             return {stack, position: newpos};
         },
         jumpi: (newpos, condition, {stack, position}) => {
+            const gasCost = getPrice('jumpi');
+            jsvm_env.useGas(gasCost);
             const _position = position;
             newpos = newpos.toNumber();
             if (condition.toNumber() === 1) position = newpos;
-            logger.debug('JUMPI', [condition, newpos], [], getCache(), stack, undefined, _position);
+            logger.debug('JUMPI', [condition, newpos], [], getCache(), stack, undefined, _position, gasCost);
             return {stack, position};
         },
         jumpdest:({stack, position}) => {
-            logger.debug('JUMPDEST', [], [], getCache(), stack, undefined, position);
+            const gasCost = getPrice('jumpdest');
+            jsvm_env.useGas(gasCost);
+            logger.debug('JUMPDEST', [], [], getCache(), stack, undefined, position, gasCost);
         },
         pop: ({stack, position}) => {
+            const gasCost = getPrice('pop');
+            jsvm_env.useGas(gasCost);
             stack.pop();
-            logger.debug('POP', [], [], getCache(), stack, undefined, position);
+            logger.debug('POP', [], [], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
     }
@@ -677,19 +916,34 @@ const interpreter = async ({bytecode, importObj, stack = [], calldata=[], positi
 }
 
 const interpretOpcode = async ({bytecode, stack, importObj, position}) => {
-    const hexcode = bytecode[position].toString(16).padStart(2, '0');
+    let hexcode;
+    const args = [];
+    if (bytecode[position]) {
+        hexcode = bytecode[position].toString(16).padStart(2, '0');
+    }
+    else {
+        hexcode = '00';
+        args.push(true);
+    }
     position += 1;
     const code = parseInt(hexcode, 16);
     const opcode = opcodes[hexcode];
     let obj;
+    let opcodeName;
+    const invalidError = `Invalid opcode ${hexcode}; ${typeof hexcode} - ${JSON.stringify(opcode)}`;
 
-    if (opcode && importObj[opcode.name]) {
-        const args = [];
+    if (opcode && importObj[opcode.name]) opcodeName = opcode.name;
+    else if (0x60 <= code && code < 0x80) opcodeName = 'push';
+    else if (0x80 <= code && code < 0x90) opcodeName = 'dup';
+    else if (0x90 <= code && code < 0xa0) opcodeName = 'swap';
+    else throw new Error(invalidError);
+
+    if (opcodeName && importObj[opcodeName]) {
         for (let i = 0; i < opcode.arity; i++) {
             args.push(stack.pop());
         }
 
-        switch(opcode.name) {
+        switch(opcodeName) {
             case 'jump':
                 obj = importObj.jump(...args, {stack, position});
                 break;
@@ -700,20 +954,20 @@ const interpretOpcode = async ({bytecode, stack, importObj, position}) => {
                 obj = importObj.pop({stack, position});
                 break;
             default:
-                obj = await importObj[opcode.name](...args, {stack, position});
+                obj = await importObj[opcodeName](...args, {stack, position});
         }
     }
-    else if (0x60 <= code && code < 0x80) {
+    else if (opcodeName === 'push') {
         obj = importObj.handlePush(code, bytecode, {stack, position});
     }
-    else if (0x80 <= code && code < 0x90) {
+    else if (opcodeName === 'dup') {
         obj = importObj.handleDup(code, {stack, position});
     }
-    else if (0x90 <= code && code < 0xa0) {
+    else if (opcodeName === 'swap') {
         obj = importObj.handleSwap(code, {stack, position});
     }
     else {
-        throw new Error(`Invalid opcode ${hexcode}; ${typeof hexcode} - ${JSON.stringify(opcode)}`);
+        throw new Error(invalidError);
     }
 
     if (obj) {

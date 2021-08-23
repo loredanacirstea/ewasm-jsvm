@@ -50,7 +50,9 @@ const logg = (name, _level, _handler, filterExclude=[], filterInclude=[]) => {
                 logged = _handler(...args);
                 if (!logged) return;
             }
-            if (!logged) logged = args.map(printval).join(', ');
+            if (!logged) {
+                logged = args.map(v => printval(v)).join(', ');
+            }
             DEEFAULT_HANDLER[lvl](name, logged);
             count += 1;
         }
@@ -91,7 +93,10 @@ const contexthandler = (msg, txobj={}) => {
     return msg + ' ' + printval(printobj);
 }
 
-const Logger = logg('', LEVELS.SILENT, null, [], []);
+let cliLevel = process.env.LOGGER || LEVELS.SILENT;
+if (!ORDER[cliLevel]) cliLevel = LEVELS.SILENT;
+
+const Logger = logg('', cliLevel, null, [], []);
 Logger.spawn('jsvm');
 Logger.spawn('ewasmjsvm');
 Logger.spawn('evmjs');

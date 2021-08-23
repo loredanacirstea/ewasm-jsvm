@@ -26,20 +26,34 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         const fromBalance = persistenceApi.get(from).balance;
         const toBalance = persistenceApi.get(to).balance;
         Logger.get('jsvm').get('transferValue').debug('---', fromBalance.toString(), toBalance.toString(), parsedValue.toString());
-        if (fromBalance.lt(parsedValue)) throw new Error('Not enough balance.');
+
+        if (fromBalance.lt(parsedValue)) {
+            throw new Error('Not enough balance.');
+        }
 
         persistenceApi.updateBalance(to, toBalance.add(parsedValue));
         persistenceApi.updateBalance(from, fromBalance.sub(parsedValue));
     }
 
-    const call = (txObj, internalCallWrap, asyncResourceWrap, getMemory, getCache) => {
+    const callJsvm = (txObj, internalCallWrap, asyncResourceWrap, getMemory, _getCache) => {
         const txInfo = Object.assign({}, txObj);
         txInfo.origin = txInfo.from;
 
         Logger.get('jsvm').get('tx').debug('call', txInfo);
 
-        const cache = getCache();
-        const persistenceWrap = initPersistence(cache.context);
+        const cache = _getCache();
+        const clonedContext = cloneContext(cache.context);
+        const clonedLogs = cloneLogs(_getCache().logs);
+
+        const getCache = () => {
+            return {
+                ...cache,
+                context: clonedContext,
+                logs: clonedLogs,
+            }
+        }
+
+        const persistenceWrap = initPersistence(clonedContext);
         Logger.get('jsvm').get('persistenceWrap').debug(Object.keys(cache.context));
         persistenceWrap._get = persistenceWrap.get;
         persistenceWrap.get = function (account) {
@@ -52,11 +66,23 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 // execution stops here
                 throw new Error(ERROR.ASYNC_RESOURCE);
             }
+            result.getStorageOriginal = (key) => {
+                const value = cache.context[account].storage[key];
+                if (typeof value === 'undefined') {
+                    Logger.get('jsvm').debug('asyncResourceWrap', account, key);
+                    // original account, without current changes
+                    asyncResourceWrap(cache.context[account], [key]);
+                    // execution stops here
+                    throw new Error(ERROR.ASYNC_RESOURCE);
+                }
+                return value;
+            }
             result.getStorage = (key) => {
                 const value = result.storage[key];
                 if (typeof value === 'undefined') {
                     Logger.get('jsvm').debug('asyncResourceWrap', account, key);
-                    asyncResourceWrap(result, [key]);
+                    // original account, without current changes
+                    asyncResourceWrap(cache.context[account], [key]);
                     // execution stops here
                     throw new Error(ERROR.ASYNC_RESOURCE);
                 }
@@ -66,7 +92,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 const oldvalue = result.storage[key];
                 if (typeof oldvalue === 'undefined') {
                     Logger.get('jsvm').debug('asyncResourceWrap', account, key);
-                    asyncResourceWrap(result, [key]);
+                    // original account, without current changes
+                    asyncResourceWrap(cache.context[account], [key]);
                     // execution stops here
                     throw new Error(ERROR.ASYNC_RESOURCE);
                 }
@@ -75,7 +102,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             }
             return result;
         }
-        const chainlogsWrap = initLogs(cache.logs);
+        const chainlogsWrap = initLogs(clonedLogs);
 
         // Transfer ether if any
         if (txInfo.value && !toBN(txInfo.value).isZero()) {
@@ -87,13 +114,30 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         let gas = {
             limit: toBN(txObj.gasLimit || 4000000),
             price: toBN(txObj.gasPrice || 1),
-            used: toBN(0),
+            used: toBN(txInfo.gasUsed || 0),
         }
         const getGas = () => gas;
-        const useGas = gas => {
-            gas.used = gas.used.add(gas);
+        const useGas = (gasUnits, addGas = true) => {
+            if (addGas) gas.used = gas.used.add(toBN(gasUnits));
+            else gas.used = gas.used.sub(toBN(gasUnits));
+            if (gas.used.gt(gas.limit)) throw new Error(`${ERROR.OUT_OF_GAS}. Using ${gasUnits} - ${gas.used.toString()}/${gas.limit.toString()}`);
         }
         txInfo.gas = gas;
+
+        const storageWrites = {};
+        const storageReads = {};
+        const storageRecords = {
+            write: (key) => {
+                if (!storageWrites[key]) storageWrites[key] = 0;
+                storageWrites[key] ++;
+                return storageWrites[key];
+            },
+            read: (key) => {
+                if (!storageReads[key]) storageReads[key] = 0;
+                storageReads[key] ++;
+                return storageReads[key];
+            },
+        }
 
         const block = blocks.set();
         let memoryMap;
@@ -128,6 +172,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             setReturnData,
             getCache,
             getMemory || getNewMemory,
+            storageRecords,
+            () => clonedContext,
         );
     }
 
@@ -145,8 +191,12 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         setReturnData,
         getCache,
         getMemory,
+        storageRecords,
+        getContext,
     ) => {
         let currentCacheIndex = 0;
+        let wordCount = toBN(0);
+        let highestMemCost = toBN(0);
         const storageMap = () => getInstance().storage;
 
         const storeMemory = (bytes, offset, size) => {
@@ -169,10 +219,34 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
             key = uint8ArrayToHex(key);
             return getInstance().getStorage(key) || hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
         }
+        const storageLoadOriginal = (key) => {
+            Logger.get('jsvm').get('storage').debug('loadOriginal', key);
+            key = uint8ArrayToHex(key);
+            return getInstance().getStorageOriginal(key) || hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
+        }
 
         const vmapi = {
             // i32ptr is u128
             // 33 methods
+                storageRecords,
+                getContext,
+                getCache,
+                getLogs: chainlogs.getLogs,
+                memWordCount: function () {
+                    return wordCount;
+                },
+                highestMemCost: function () {
+                    return highestMemCost;
+                },
+                setMemWordCount: function (_wordCount) {
+                    wordCount = _wordCount;
+                },
+                setHighestMemCost: function (_highestMemCost) {
+                    highestMemCost = _highestMemCost;
+                },
+                getMSize: function () {
+                    return wordCount.mul(32);
+                },
                 storeMemory: function (bytes, offset) {
                     Logger.get('jsvm').get('memory').debug('store', bytes, offset);
                     storeMemory(bytes, offset.toNumber(), 32);
@@ -186,6 +260,11 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 },
                 useGas: function (amount) {
                     useGas(amount);
+                },
+                refundGas: function (amount) {
+                    // can be negative due to SSTORE EIP2200;
+                    if (toBN(amount).isNeg()) useGas(amount.abs());
+                    else useGas(amount, false);
                 },
                 getAddress: function () {
                     const size = 32;
@@ -259,6 +338,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                         origin: vmapi.getTxOrigin(),
                         data,
                         value,
+                        gasUsed: vmapi.getGas(),
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
@@ -318,6 +398,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                         origin: vmapi.getTxOrigin(),
                         data,
                         value,
+                        gasUsed: vmapi.getGas(),
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
@@ -382,6 +463,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                         origin: vmapi.getTxOrigin(),
                         data,
                         value: txObj.value,
+                        gasUsed: vmapi.getGas(),
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
@@ -434,6 +516,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                         origin: vmapi.getTxOrigin(),
                         data,
                         value: new Uint8Array(0),
+                        gasUsed: vmapi.getGas(),
                     }
                     const cachedResult = cache.getAndCheck(currentCacheIndex, currentData);
 
@@ -463,6 +546,9 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 },
                 storageLoad: function (key_uint8array) {
                     return storageLoad(key_uint8array);
+                },
+                storageLoadOriginal: function (key_uint8array) {
+                    return storageLoadOriginal(key_uint8array);
                 },
                 getCaller: function () {
                     const size = 32;
@@ -550,6 +636,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     Logger.get('jsvm').get('getExternalCodeSize').debug(address);
                     return toBN(persistence.get(address).runtimeCode.length);
                 },
+                getGas: getGas,
                 getGasLeft: function () {
                     const gas = getGas();
                     return gas.limit.sub(gas.used);
@@ -628,11 +715,8 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 getBlockChainId: function () {
                     return toBN(99);
                 },
-                getMSize: function () {
-                    return (new Uint8Array(getMemory().buffer)).length;
-                },
                 stop: function() {
-                    return new Uint8Array(0);
+                    return toBN(0);
                 },
                 transferValue,
         }
@@ -645,7 +729,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         logs: chainlogs,
     }
 
-    return { persistence: wrappersist, call }
+    return { persistence: wrappersist, call: callJsvm }
 
 }
 

@@ -32,6 +32,7 @@ const c3 = [
         { name: 'calldata', type: 'address' },
         { name: 'extcodesize', type: 'uint' },
         { name: 'extcodecopy', type: 'bytes32' },
+        { name: 'multiv', type: 'uint' },
     ]},
 ]
 
@@ -94,9 +95,13 @@ const c12 = [
     { name: 'test_call', type: 'function', inputs: [{ name: 'externalc', type: 'address'}, { name: 'a', type: 'uint256'}], outputs: [{ name: 'result', type: 'uint256'}]},
 ]
 
+const c13 = [
+    { name: 'main', type: 'fallback', inputs: [], outputs: [{ name: 'val', type: 'uint256' }]},
+]
+
 const taylor = [
     { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
     { name: 'main', type: 'fallback', inputs: [{ name: 'data', type: 'bytes'}], outputs: [{ name: 'result', type: 'bytes' }]},
 ]
 
-module.exports = { c1, c2, c3, c4, c5, c6, c7, c7b, c8, c9, c9_, c10, c12 };
+module.exports = { c1, c2, c3, c4, c5, c6, c7, c7b, c8, c9, c9_, c10, c12, c13 };

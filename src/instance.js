@@ -1,5 +1,5 @@
 const { ethers } = require('ethers');
-const { ERROR } = require('./constants');
+const { ERROR, BASE_TX_COST } = require('./constants');
 const {Logger, logg} = require('./config');
 const {
     encodeWithSignature,
@@ -34,9 +34,11 @@ function instance ({
     const ilogger = Logger.get(vmname);
 
     const getResource = async (address, stateProvider) => {
+        if (!address) throw new Error('getResource address missing');
         let data = vmcore.persistence.accounts.get(address);
         // Get account data from provider
         if (data.empty && stateProvider) {
+            ilogger.get('getResource').debug(address);
             const runtimeCode = await stateProvider.getCode(address);
             const balance = await stateProvider.getBalance(address);
             data.runtimeCode = typeof runtimeCode === 'string' ? hexToUint8Array(runtimeCode) : runtimeCode;
@@ -89,12 +91,12 @@ function instance ({
             abi: wabi,
             bin: bytecode,
         }
-        const opcodelogs = (logs) => {
-            wrappedInstance.logs = logs;
+        const appendtxinfo = (obj) => {
+            Object.assign(wrappedInstance, obj);
         }
 
-        const _finishAction = finishAction(ilogger, vmcore.persistence, address, wabi, opcodelogs);
-        const _revertAction = revertAction(ilogger, vmcore.persistence, address, opcodelogs);
+        const _finishAction = finishAction(ilogger, vmcore.persistence, address, wabi, appendtxinfo);
+        const _revertAction = revertAction(ilogger, vmcore.persistence, address, appendtxinfo);
         const _startExecution = startExecution({
             vmcore,
             ilogger,
@@ -122,7 +124,7 @@ function instance ({
 
     const _storeStateChanges = storeStateChanges(ilogger, vmcore.persistence);
 
-    const finishAction = (ilogger, persistence, address, wabi, opcodelogs) => currentPromise => (answ, e) => {
+    const finishAction = (ilogger, persistence, address, wabi, appendtxinfo) => currentPromise => ({result: answ, gas, context, logs}, e) => {
         if (!currentPromise) {
             console.log('No queued promise found.'); // throw new Error('No queued promise found.');
             return;
@@ -134,7 +136,7 @@ function instance ({
         let result;
         if (currentPromise.name === 'constructor') {
             // ilogger.get('finishAction_constructor').debug(currentPromise.name, answ);
-            currentPromise.cache.context[address].runtimeCode = answ;
+            context[address].runtimeCode = answ;
             result = address;
         } else {
             const abi = wabi.find(abi => abi.name === currentPromise.name);
@@ -143,10 +145,14 @@ function instance ({
             else result = answ !== null && typeof answ !== 'undefined' && abi && abi.outputs ? decode(abi.outputs, answ) : answ;
         }
 
-        opcodelogs(currentPromise.opcodelogs)
+        appendtxinfo({
+            logs: currentPromise.opcodelogs,
+            gas: gas,
+            txInfo: currentPromise.txInfo,
+        });
 
         if (!e) {
-            _storeStateChanges({accounts: currentPromise.cache.context, logs: currentPromise.cache.logs});
+            _storeStateChanges({accounts: context, logs});
             currentPromise.resolve(result);
         }
         else {
@@ -158,7 +164,7 @@ function instance ({
         return ERROR.STOP;
     }
 
-    const revertAction = (ilogger, persistence, address, opcodelogs) => currentPromise => answ => {
+    const revertAction = (ilogger, persistence, address, appendtxinfo) => currentPromise => ({result: answ, gas}) => {
         if (!currentPromise) {
             console.log('No queued promise found.'); // throw new Error('No queued promise found.');
             return;
@@ -168,7 +174,11 @@ function instance ({
         }
         const error = new Error('Revert: ' + uint8ArrayToHex(answ));
         ilogger.get('revertAction').debug(currentPromise.name, answ);
-        opcodelogs(currentPromise.opcodelogs)
+        appendtxinfo({
+            logs: currentPromise.opcodelogs,
+            gas,
+            txInfo: currentPromise.txInfo,
+        });
         currentPromise.reject(error);
         currentPromise.resolved = true;
         return ERROR.STOP;
@@ -183,7 +193,7 @@ function instance ({
         cache.set = (index, obj) => cache.data[index] = obj;
         cache.getAndCheck = (index, txobj) => {
             const cachedtx = cache.get(index);
-            const hexdata = lowtx2hex(txobj)
+            const hexdata = lowtx2hex(txobj);
 
             if (!cachedtx || !cachedtx.result) return;
             Object.keys(cachedtx).forEach(key => {
@@ -215,13 +225,13 @@ function instance ({
         // needed, otherwise it cycles;
         cache.context[txInfo.from].empty = false;
         cache.context[txInfo.to].empty = false;
+        txInfo.gasUsed = toBN(BASE_TX_COST);
 
         let currentPromise = {
             resolve, reject,
             name: getfname(fabi),
             methodName: entrypoint ? entrypoint(fabi) : 'main',
             txInfo,
-            gas: {limit: toBN(txInfo.gasLimit), price: toBN(txInfo.gasPrice), used: toBN(0)},
             data: typeof txInfo.data === 'string' ? hexToUint8Array(txInfo.data) : txInfo.data,
             cache
         };
@@ -404,7 +414,7 @@ function instance ({
         return instantiateModule(bytecode, importObj).then(async wmodule => {
             currentPromise.minstance = wmodule.instance;
             currentPromise.importObj = importObj; // near memory access
-            ologger.debug('--', [], [], getCache());
+            ologger.debug('--', [], [], getCache(), undefined, undefined, undefined, toBN(0), toBN(0));
 
             // _NEAR constructor
             if (!wmodule.instance.exports[currentPromise.methodName]) {
@@ -433,7 +443,7 @@ function instance ({
                         return;
                     default:
                         // internal errors - throw error after logs are set
-                        finishAction(currentPromise)(null, e);
+                        finishAction(currentPromise)({result: null}, e);
                         return;
                 }
             }
@@ -481,7 +491,7 @@ const storeStateChanges = (ilogger, persistence) => (context) => {
 }
 
 const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...args) => {
-    const [name, input, output, cache, stack, changed, position] = args;
+    const [name, input, output, cache, stack, changed, position, gasCost, addlGasCost, refundedGas] = args;
     const {context, logs, data} = cache;
     const clonedContext = cloneContext(context);
     const clonedLogs =  cloneLogs(logs);
@@ -491,7 +501,7 @@ const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...
         return val instanceof Uint8Array ? val : BN2uint8arr(val);
     }) : [];
 
-    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed, position: position || 0};
+    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed, position: position || 0, gasCost, addlGasCost, refundedGas};
     callback(log);
 
     if (Logger.getLevel() === 'DEBUG') return log;
