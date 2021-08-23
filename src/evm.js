@@ -503,7 +503,7 @@ const initializeImports = (
             jsvm_env.useGas(gasCost);
             const result = jsvm_env.finish(dataOffset, dataLength);
             logger.debug('FINISH', [dataOffset, dataLength], [result], getCache(), stack, undefined, position, gasCost);
-            finishAction({result, gas: jsvm_env.getGas(), context: jsvm_env.getContext()});
+            finishAction({result, gas: jsvm_env.getGas(), context: jsvm_env.getContext(), logs: jsvm_env.getLogs()});
             return {stack, position: 0};
         },
         revert: function (dataOffset, dataLength, {stack, position}) {
@@ -550,7 +550,7 @@ const initializeImports = (
             jsvm_env.useGas(gasCost);
             jsvm_env.selfDestruct(BN2uint8arr(address));
             logger.debug('SELFDESTRUCT', [address], [], getCache(), stack, undefined, position, gasCost);
-            finishAction({gas: jsvm_env.getGas(), context: jsvm_env.getContext()});
+            finishAction({gas: jsvm_env.getGas(), context: jsvm_env.getContext(), logs: jsvm_env.getLogs()});
             return {stack, position: 0};
         },
         getBlockTimestamp: function ({stack, position}) {
@@ -566,7 +566,7 @@ const initializeImports = (
             jsvm_env.useGas(gasCost);
             const result = jsvm_env.finish(offset, length);
             logger.debug('RETURN', [offset, length], [result], getCache(), stack, undefined, position, gasCost);
-            finishAction({result, gas: jsvm_env.getGas(), context: jsvm_env.getContext()});
+            finishAction({result, gas: jsvm_env.getGas(), context: jsvm_env.getContext(), logs: jsvm_env.getLogs()});
             return {stack, position: 0};
         },
         revert: (offset, length, {stack, position}) => {
@@ -583,7 +583,7 @@ const initializeImports = (
             if (!forced) {
                 logger.debug('STOP', [], [], getCache(), stack, undefined, position, gasCost);
             }
-            finishAction({gas: jsvm_env.getGas(), context: jsvm_env.getContext()});
+            finishAction({gas: jsvm_env.getGas(), context: jsvm_env.getContext(), logs: jsvm_env.getLogs()});
             return {stack, position: 0};
         },
         keccak256: (offset, length, {stack, position}) => {

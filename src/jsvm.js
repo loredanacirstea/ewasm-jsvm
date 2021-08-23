@@ -230,6 +230,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 storageRecords,
                 getContext,
                 getCache,
+                getLogs: chainlogs.getLogs,
                 memWordCount: function () {
                     return wordCount;
                 },
