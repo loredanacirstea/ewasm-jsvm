@@ -47,6 +47,7 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
 
         const getCache = () => {
             return {
+                ...cache,
                 context: clonedContext,
                 logs: clonedLogs,
             }

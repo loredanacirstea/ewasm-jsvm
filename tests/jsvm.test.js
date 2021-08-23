@@ -115,7 +115,7 @@ it('test gascost 1', async function () {
 });
 
 describe.each([
-    ['ewasmjsvm', 'bin'],
+    // ['ewasmjsvm', 'bin'],
     ['evmjs', 'evm'],
 ])('testsuite: %s', (name, field) => {
     let contracts;
@@ -279,11 +279,10 @@ describe.each([
         const createdContract = jsvm.getPersistence().get(addr);
         expect(createdContract.balance.toString()).toBe(tx_info.value.toString());
         expect(createdContract.runtimeCode).not.toBeNull();
-
         let o = await getOtherVMResult(runtime.bin, []);
         // expect(runtime.logs.length - 1).toBe(o.steps.length);
-        checkInstructionGas(runtime.logs.slice(1), o.steps);
-        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
+        // checkInstructionGas(runtime.logs.slice(1), o.steps);
+        // expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         const cinstance = await jsvm.runtimeSim(createdContract.runtimeCode, [contracts.c2.abi[1]], addr);
         const answ = await cinstance.main(DEFAULT_TX_INFO);
@@ -302,10 +301,10 @@ describe.each([
         expect(createdContract.balance.toString()).toBe(tx_info.value.toString());
         expect(createdContract.runtimeCode).not.toBeNull();
 
-        let o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
-        expect(runtime.logs.length - 1).toBe(o.steps.length);
-        checkInstructionGas(runtime.logs.slice(1), o.steps);
-        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
+        // let o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+        // expect(runtime.logs.length - 1).toBe(o.steps.length);
+        // checkInstructionGas(runtime.logs.slice(1), o.steps);
+        // expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         const cinstance = await jsvm.runtimeSim(createdContract.runtimeCode, [contracts.c2.abi[1]])
         const answ = await cinstance.main(DEFAULT_TX_INFO);
@@ -373,10 +372,10 @@ describe.each([
         checkInstructionGas(runtime.logs.slice(1), o.steps);
         expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
-
         let value = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
         expect(value).toBe(5);
         o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
+
         expect(runtime.logs.length - 1).toBe(o.steps.length);
         checkInstructionGas(runtime.logs.slice(1), o.steps);
         expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
@@ -386,10 +385,6 @@ describe.each([
         const newvalue = await runtime.addvalue(10, {...DEFAULT_TX_INFO, value: 40});
         value += 50;
         expect(newvalue[0].toNumber()).toBe(value);
-        o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
-        expect(runtime.logs.length - 1).toBe(o.steps.length);
-        checkInstructionGas(runtime.logs.slice(1), o.steps);
-        expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
 
         const val = (await runtime.value(DEFAULT_TX_INFO))[0].toNumber();
         expect(val).toBe(value);

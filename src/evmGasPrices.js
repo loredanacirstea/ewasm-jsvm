@@ -202,13 +202,14 @@ const special = {
         return changed;
     },
     returndatacopy: ({offset, length, memWordCount, highestMemCost}) => {
-        const changed = subMemUsage({offset, length, memWordCount, highestMemCost});
+        // const changed = subMemUsage({offset, length, memWordCount, highestMemCost});
+        const changed = {};
         changed.baseFee = toBN(gasPrices.Gverylow.value);
 
-        if (!length.eqn(0)) {
-            addl = toBN(gasPrices.Gcopy.value).imul(divCeil(length, toBN(32)));
-            changed.addl = changed.addl.add(addl);
-        }
+        // if (!length.eqn(0)) {
+        //     addl = toBN(gasPrices.Gcopy.value).imul(divCeil(length, toBN(32)));
+        //     changed.addl = changed.addl.add(addl);
+        // }
         return changed;
     },
     extcodecopy: ({offset, length, memWordCount, highestMemCost}) => {
