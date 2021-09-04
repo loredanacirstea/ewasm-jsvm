@@ -21,22 +21,27 @@ const coefs = {
       "v": 800,
       "d": "Once per SSTORE operation if a dirty value is changed"
     },
+    // SSTORE_SET_GAS
     "sstoreInitGasEIP2200": {
       "v": 20000,
       "d": "Once per SSTORE operation from clean zero to non-zero"
     },
+    // SSTORE_SET_GAS - SLOAD_GAS
     "sstoreInitRefundEIP2200": {
       "v": 19200,
       "d": "Once per SSTORE operation for resetting to the original zero value"
     },
+    // SSTORE_RESET_GAS
     "sstoreCleanGasEIP2200": {
       "v": 5000,
       "d": "Once per SSTORE operation from clean non-zero to something else"
     },
+    // SSTORE_RESET_GAS - SLOAD_GAS
     "sstoreCleanRefundEIP2200": {
       "v": 4200,
       "d": "Once per SSTORE operation for resetting to the original non-zero value"
     },
+    // SSTORE_CLEARS_SCHEDULE
     "sstoreClearRefundEIP2200": {
       "v": 15000,
       "d": "Once per SSTORE operation for clearing an originally existing storage slot"
@@ -157,7 +162,7 @@ const special = {
                 return {baseFee, addl: gasPrices.Gsset.value};
             }
             addl += gasPrices.Gsreset.value;
-            if (value.eqn(0)) refund += gasPrices.Gsreset.value;
+            if (value.eqn(0)) refund += gasPrices.Rsclear.value;
             return {baseFee, addl, refund};
         }
         // If original value does not equal current value
@@ -165,8 +170,8 @@ const special = {
 
         if (!origValue.eqn(0)) {
             // remove refund that was previously awarded
-            if (currentValue.eq(0)) refund -= gasPrices.Gsreset.value;
-            if (value.eqn(0)) refund += gasPrices.Gsreset.value;
+            if (currentValue.eqn(0)) refund -= gasPrices.Rsclear.value;
+            if (value.eqn(0)) refund += gasPrices.Rsclear.value;
         }
         if (origValue.eq(value)) {
             if (origValue.eqn(0)) refund += gasPrices.Gsset.value - gasPrices.Gsload.value;

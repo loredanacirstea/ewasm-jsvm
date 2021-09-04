@@ -262,14 +262,14 @@ const initializeImports = (
         storageStore: function (pathOffset, value, {stack, position}) {
             const key = BN2uint8arr(pathOffset);
             // TODO correct original value after EIP 2200
-            const origValue = toBN(jsvm_env.storageLoad(key));
-            const currentValue = toBN(jsvm_env.storageLoadOriginal(key));
+            const origValue = toBN(jsvm_env.storageLoadOriginal(key));
+            const currentValue = toBN(jsvm_env.storageLoad(key));
             const count = jsvm_env.storageRecords.write(key);
             const gasLeft = toBN(jsvm_env.getGasLeft());
             const {baseFee, addl, refund} = getPrice('sstore', {count, value, currentValue, origValue, gasLeft});
             jsvm_env.useGas(baseFee);
-            jsvm_env.useGas(addl);
-            jsvm_env.refundGas(refund);
+            if (addl) jsvm_env.useGas(addl);
+            if (refund) jsvm_env.refundGas(refund);
             jsvm_env.storageStore(key, BN2uint8arr(value));
             const changed = {storage: [BN2hex(pathOffset), BN2hex(value), 1]}
             logger.debug('SSTORE', [pathOffset, value], [], getCache(), stack, changed, position, baseFee, addl, refund);

@@ -263,7 +263,13 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 },
                 refundGas: function (amount) {
                     // can be negative due to SSTORE EIP2200;
-                    if (toBN(amount).isNeg()) useGas(amount.abs());
+                    // if (toBN(amount).isNeg()) useGas(toBN(amount).abs());
+                    // else useGas(amount, false);
+
+                    // amount > 0 -> we add gas to the refund counter -> subtract from used amount
+                    // amount < 0 -> we remove gas from the refund counter -> we add to the used amount
+
+                    if (amount < 0) useGas(amount * (-1));
                     else useGas(amount, false);
                 },
                 getAddress: function () {
