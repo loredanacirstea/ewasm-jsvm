@@ -70,7 +70,7 @@ function instance ({
     }
 
     const runtimeSim = (bytecode, wabi, address) => {
-        address = address || '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+        address = address || randomAddress();
         return initializeWrap(bytecode, wabi, address, true);
     }
 

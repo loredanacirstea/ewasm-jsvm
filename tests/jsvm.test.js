@@ -114,6 +114,70 @@ it('test gascost 1', async function () {
     expect(runtime.gas.used.toNumber()).toBe(results.gasUsed.toNumber() + BASE_TX_COST);
 });
 
+describe('eip2200', function () {
+    it('test gascost eip2200_3_1_1', async function () {
+        const code = '623333336020556233333360205560205460005260206000f3';
+        const runtime = await evmjs.runtimeSim(code, []);
+        await runtime.mainRaw({...DEFAULT_TX_INFO});
+        expect(runtime.gas.used.toNumber()).toBe(42630);
+
+        const {results, steps} = await getOtherVMResult(hexToUint8Array(code), []);
+        expect(runtime.logs.length - 1).toBe(steps.length);
+        checkInstructionGas(runtime.logs.slice(1), steps);
+        expect(runtime.gas.used.toNumber()).toBe(results.gasUsed.toNumber() + BASE_TX_COST);
+    });
+
+    // refunds
+    it('test gascost eip2200_3_2_2_2', async function () {
+        const code = '6006602055600060205560205460005260206000f3';
+        const runtime = await evmjs.runtimeSim(code, []);
+        await runtime.mainRaw({...DEFAULT_TX_INFO});
+        expect(runtime.gas.used.toNumber()).toBe(23430);
+
+        const {results, steps} = await getOtherVMResult(hexToUint8Array(code), []);
+        expect(runtime.logs.length - 1).toBe(steps.length);
+        // checkInstructionGas(runtime.logs.slice(1), steps);
+        expect(runtime.gas.used.toNumber()).toBe(results.gasUsed.toNumber() + BASE_TX_COST);
+    });
+
+    it('test gascost eip2200_3_1_2_1', async function () {
+        const code = '6233333360205560205460005260206000f3';
+        const runtime = await evmjs.runtimeSim(code, []);
+        await runtime.mainRaw({...DEFAULT_TX_INFO});
+        expect(runtime.gas.used.toNumber()).toBe(41824);
+
+        const {results, steps} = await getOtherVMResult(hexToUint8Array(code), []);
+        expect(runtime.logs.length - 1).toBe(steps.length);
+        checkInstructionGas(runtime.logs.slice(1), steps);
+        expect(runtime.gas.used.toNumber()).toBe(results.gasUsed.toNumber() + BASE_TX_COST);
+    });
+
+    // refunds
+    it('test gascost eip2200_3_2_1_2', async function () {
+        const code = '60066020556000602055600560205560205460005260206000f3';
+        const runtime = await evmjs.runtimeSim(code, []);
+        await runtime.mainRaw({...DEFAULT_TX_INFO});
+        expect(runtime.gas.used.toNumber()).toBe(43436);
+
+        const {results, steps} = await getOtherVMResult(hexToUint8Array(code), []);
+        expect(runtime.logs.length - 1).toBe(steps.length);
+        // checkInstructionGas(runtime.logs.slice(1), steps);
+        expect(runtime.gas.used.toNumber()).toBe(results.gasUsed.toNumber() + BASE_TX_COST);
+    });
+
+    it('test gascost eip2200_3_1_2_2', async function () {
+        const code = '6000602055600460205560205460005260206000f3';
+        const runtime = await evmjs.runtimeSim(code, []);
+        await runtime.mainRaw({...DEFAULT_TX_INFO});
+        expect(runtime.gas.used.toNumber()).toBe(42630);
+
+        const {results, steps} = await getOtherVMResult(hexToUint8Array(code), []);
+        expect(runtime.logs.length - 1).toBe(steps.length);
+        checkInstructionGas(runtime.logs.slice(1), steps);
+        expect(runtime.gas.used.toNumber()).toBe(results.gasUsed.toNumber() + BASE_TX_COST);
+    });
+})
+
 describe.each([
     // ['ewasmjsvm', 'bin'],
     ['evmjs', 'evm'],
