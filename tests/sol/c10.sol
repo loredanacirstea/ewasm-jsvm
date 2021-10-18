@@ -2,6 +2,11 @@ pragma solidity ^0.7.0;
 
 contract c10 {
     uint256 public value = 5;
+    uint256 public valueb;
+
+    constructor (uint256 _valueb) {
+        valueb = _valueb;
+    }
 
     function testAddress(address addr) pure public returns (address c) {
         return addr;

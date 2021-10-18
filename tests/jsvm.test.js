@@ -464,8 +464,11 @@ describe.each([
 
     it('test c10 - simple functions', async function () {
         let o;
-        const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(DEFAULT_TX_INFO);
+        const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(15, {...DEFAULT_TX_INFO, gasLimit: 6000000});
         deployments.c10 = runtime;
+
+        let valueb = (await runtime.valueb(DEFAULT_TX_INFO))[0].toNumber();
+        expect(valueb).toBe(15);
 
         let answ = await runtime.sum(8, 2, DEFAULT_TX_INFO);
         expect(answ.c.toNumber()).toBe(10);
@@ -508,7 +511,7 @@ describe.each([
     }, 5000);
 
     it('test c10 - callStatic, call', async function () {
-        const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(DEFAULT_TX_INFO);
+        const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(15, DEFAULT_TX_INFO);
         deployments.c10 = runtime;
 
         const _runtime = await jsvm.deploy(contracts.c12[field], contracts.c12.abi)(DEFAULT_TX_INFO);
@@ -544,7 +547,7 @@ describe.each([
     }, 15000);
 
     it('test c10 revert', async function () {
-        const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)({...DEFAULT_TX_INFO});
+        const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(15, {...DEFAULT_TX_INFO});
         let value = (await runtime.value({...DEFAULT_TX_INFO}))[0].toNumber();
         let balance = jsvm.getPersistence().get(runtime.address).balance.toNumber();
 

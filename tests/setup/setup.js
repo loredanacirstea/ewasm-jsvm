@@ -109,13 +109,17 @@ const compileContracts = async () => {
     // names = ['c11', 'c12']
 
     for (let name of names) {
-        contracts[name] = await compile(name);
-        createBuild(name, contracts[name]);
+        contracts[name] = {};
         contracts[name].abi = abis[name];
-    }
 
-    // Compile to Evm
-    for (let name of names) {
+        // FIXME TODO
+        // contracts[name] = {
+        //     ...contracts[name],
+        //     ...(await compile(name)),
+        // }
+        // createBuild(name, contracts[name]);
+
+        // Compile to Evm
         contracts[name].evm = (await compileEvm(name)).bin;
     }
     return contracts;
