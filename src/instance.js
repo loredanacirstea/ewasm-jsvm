@@ -50,13 +50,11 @@ function instance ({
         return data;
     }
 
-    const deploy = (bytecode, wabi) => async (...args) => {
+    const deploy = (bytecode, wabi, address) => async (...args) => {
         ilogger.debug('deploy', ...args);
-        const address = randomAddress();
+        address = address || randomAddress();
         const constructori = await initializeWrap(bytecode, wabi, address, false);
-        // TODO: constructor args
-        const txInfo = args[args.length - 1];
-        await constructori.main(txInfo);
+        await constructori.main(...args);
         ilogger.debug('deployed', address);
         const instance = await runtime(address, wabi);
         return instance;
@@ -359,12 +357,13 @@ function instance ({
             const calldataTypes = (wabi.find(abi => abi.name === fname || (abi.type === fname && fname === 'constructor')) || {}).inputs;
             calldata = signature ? encodeWithSignature(signature, calldataTypes, args) : encode(calldataTypes, args);
         }
-        txInfo.data = calldata;
 
-        if (!signature && !fabi && txInfo.data.length === 0) {
+        // if (!signature && !fabi && txInfo.data.length === 0) {
+        if (!signature && !fabi && !encodeInput) {
             // constructor
-            txInfo.data = bytecode;
+            txInfo.data = new Uint8Array([...bytecode, ...calldata]);
         }
+        else txInfo.data = calldata;
         return _wrappedMainRaw(fabi) (txInfo);
     }
 

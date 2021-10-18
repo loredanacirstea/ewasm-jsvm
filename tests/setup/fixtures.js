@@ -77,10 +77,11 @@ const c9_ = [
 ]
 
 const c10 = [
-    { name: 'constructor', type: 'constructor', inputs: [], outputs: []},
+    { name: 'constructor', type: 'constructor', inputs: [{ name: '_valueb', type: 'uint256'}], outputs: []},
     { name: 'sum', type: 'function', inputs: [{ name: 'a', type: 'uint256'}, { name: 'b', type: 'uint256'}], outputs: [{ name: 'c', type: 'uint256'}]},
     { name: 'double', type: 'function', inputs: [{ name: 'a', type: 'uint256'}], outputs: [{ name: 'b', type: 'uint256'}]},
     { name: 'value', type: 'function', inputs: [], outputs: [{ name: 'b', type: 'uint256'}]},
+    { name: 'valueb', type: 'function', inputs: [], outputs: [{ name: 'b', type: 'uint256'}]},
     { name: 'addvalue', type: 'function', inputs: [{ name: '_value', type: 'uint256'}], outputs: [{ name: 'b', type: 'uint256'}]},
     { name: '_revert', type: 'function', inputs: [], outputs: []},
 

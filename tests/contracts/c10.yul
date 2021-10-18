@@ -6,26 +6,57 @@
  *******************************************************/
 
 
-object "c10_63" {
+object "c10_75" {
     code {
         mstore(64, 128)
         if callvalue() { revert(0, 0) }
 
-        constructor_c10_63()
+        let _1 := copy_arguments_for_constructor_16_object_c10_75()
+        constructor_c10_75(_1)
 
-        codecopy(0, dataoffset("c10_63_deployed"), datasize("c10_63_deployed"))
+        codecopy(0, dataoffset("c10_75_deployed"), datasize("c10_75_deployed"))
 
-        return(0, datasize("c10_63_deployed"))
+        return(0, datasize("c10_75_deployed"))
+
+        function abi_decode_t_uint256_fromMemory(offset, end) -> value {
+            value := mload(offset)
+            validator_revert_t_uint256(value)
+        }
+
+        function abi_decode_tuple_t_uint256_fromMemory(headStart, dataEnd) -> value0 {
+            if slt(sub(dataEnd, headStart), 32) { revert(0, 0) }
+
+            {
+
+                let offset := 0
+
+                value0 := abi_decode_t_uint256_fromMemory(add(headStart, offset), dataEnd)
+            }
+
+        }
+
+        function allocateMemory(size) -> memPtr {
+            memPtr := mload(64)
+            let newFreePtr := add(memPtr, size)
+            // protect against overflow
+            if or(gt(newFreePtr, 0xffffffffffffffff), lt(newFreePtr, memPtr)) { panic_error_0x41() }
+            mstore(64, newFreePtr)
+        }
 
         function cleanup_t_uint256(value) -> cleaned {
             cleaned := value
         }
 
-        function constructor_c10_63() {
+        function constructor_c10_75(vloc__valueb_8) {
 
             let expr_3 := 0x05
-            let _1 := convert_t_rational_5_by_1_to_t_uint256(expr_3)
-            update_storage_value_offset_0t_uint256_to_t_uint256(0x00, _1)
+            let _2 := convert_t_rational_5_by_1_to_t_uint256(expr_3)
+            update_storage_value_offset_0t_uint256_to_t_uint256(0x00, _2)
+
+            let _3 := vloc__valueb_8
+            let expr_12 := _3
+            update_storage_value_offset_0t_uint256_to_t_uint256(0x01, expr_12)
+            let expr_13 := expr_12
 
         }
 
@@ -35,6 +66,22 @@ object "c10_63" {
 
         function convert_t_uint256_to_t_uint256(value) -> converted {
             converted := cleanup_t_uint256(value)
+        }
+
+        function copy_arguments_for_constructor_16_object_c10_75() -> ret_param_0 {
+            let programSize := datasize("c10_75")
+            let argSize := sub(codesize(), programSize)
+
+            let memoryDataOffset := allocateMemory(argSize)
+            codecopy(memoryDataOffset, programSize, argSize)
+
+            ret_param_0 := abi_decode_tuple_t_uint256_fromMemory(memoryDataOffset, add(memoryDataOffset, argSize))
+        }
+
+        function panic_error_0x41() {
+            mstore(0, 35408467139433450592217433187231851964531694900788300625387963629091585785856)
+            mstore(4, 0x41)
+            revert(0, 0x24)
         }
 
         function prepare_store_t_uint256(value) -> ret {
@@ -60,8 +107,12 @@ object "c10_63" {
             sstore(slot, update_byte_slice_32_shift_0(sload(slot), prepare_store_t_uint256(convertedValue_0)))
         }
 
+        function validator_revert_t_uint256(value) {
+            if iszero(eq(value, cleanup_t_uint256(value))) { revert(0, 0) }
+        }
+
     }
-    object "c10_63_deployed" {
+    object "c10_75_deployed" {
         code {
             mstore(64, 128)
 
@@ -86,7 +137,7 @@ object "c10_63" {
                     // _revert()
 
                     abi_decode_tuple_(4, calldatasize())
-                    let ret_0 :=  fun__revert_62()
+                    let ret_0 :=  fun__revert_74()
                     let memPos := allocateMemory(0)
                     let memEnd := abi_encode_tuple_t_uint256__to_t_uint256__fromStack(memPos , ret_0)
                     return(memPos, sub(memEnd, memPos))
@@ -97,7 +148,7 @@ object "c10_63" {
                     // testAddress(address)
                     if callvalue() { revert(0, 0) }
                     let param_0 :=  abi_decode_tuple_t_address(4, calldatasize())
-                    let ret_0 :=  fun_testAddress_14(param_0)
+                    let ret_0 :=  fun_testAddress_26(param_0)
                     let memPos := allocateMemory(0)
                     let memEnd := abi_encode_tuple_t_address__to_t_address__fromStack(memPos , ret_0)
                     return(memPos, sub(memEnd, memPos))
@@ -108,7 +159,18 @@ object "c10_63" {
                     // addvalue(uint256)
 
                     let param_0 :=  abi_decode_tuple_t_uint256(4, calldatasize())
-                    let ret_0 :=  fun_addvalue_47(param_0)
+                    let ret_0 :=  fun_addvalue_59(param_0)
+                    let memPos := allocateMemory(0)
+                    let memEnd := abi_encode_tuple_t_uint256__to_t_uint256__fromStack(memPos , ret_0)
+                    return(memPos, sub(memEnd, memPos))
+                }
+
+                case 0x783842c9
+                {
+                    // valueb()
+                    if callvalue() { revert(0, 0) }
+                    abi_decode_tuple_(4, calldatasize())
+                    let ret_0 :=  getter_fun_valueb_6()
                     let memPos := allocateMemory(0)
                     let memEnd := abi_encode_tuple_t_uint256__to_t_uint256__fromStack(memPos , ret_0)
                     return(memPos, sub(memEnd, memPos))
@@ -119,7 +181,7 @@ object "c10_63" {
                     // sum(uint256,uint256)
                     if callvalue() { revert(0, 0) }
                     let param_0, param_1 :=  abi_decode_tuple_t_uint256t_uint256(4, calldatasize())
-                    let ret_0 :=  fun_sum_28(param_0, param_1)
+                    let ret_0 :=  fun_sum_40(param_0, param_1)
                     let memPos := allocateMemory(0)
                     let memEnd := abi_encode_tuple_t_uint256__to_t_uint256__fromStack(memPos , ret_0)
                     return(memPos, sub(memEnd, memPos))
@@ -260,65 +322,65 @@ object "c10_63" {
                 value := cleanup_from_storage_t_uint256(shift_right_0_unsigned(slot_value))
             }
 
-            function fun__revert_62() -> vloc__50 {
+            function fun__revert_74() -> vloc__62 {
                 let zero_value_for_type_t_uint256_10 := zero_value_for_split_t_uint256()
-                vloc__50 := zero_value_for_type_t_uint256_10
+                vloc__62 := zero_value_for_type_t_uint256_10
 
                 let _11 := read_from_storage_split_offset_0_t_uint256(0x00)
-                let expr_53 := _11
-                let expr_54 := 0x0a
-                let expr_55 := checked_add_t_uint256(expr_53, convert_t_rational_10_by_1_to_t_uint256(expr_54))
+                let expr_65 := _11
+                let expr_66 := 0x0a
+                let expr_67 := checked_add_t_uint256(expr_65, convert_t_rational_10_by_1_to_t_uint256(expr_66))
 
-                update_storage_value_offset_0t_uint256_to_t_uint256(0x00, expr_55)
-                let expr_56 := expr_55
+                update_storage_value_offset_0t_uint256_to_t_uint256(0x00, expr_67)
+                let expr_68 := expr_67
                 revert(0, 0)
 
             }
 
-            function fun_addvalue_47(vloc__value_30) -> vloc__33 {
+            function fun_addvalue_59(vloc__value_42) -> vloc__45 {
                 let zero_value_for_type_t_uint256_6 := zero_value_for_split_t_uint256()
-                vloc__33 := zero_value_for_type_t_uint256_6
+                vloc__45 := zero_value_for_type_t_uint256_6
 
                 let _7 := read_from_storage_split_offset_0_t_uint256(0x00)
-                let expr_36 := _7
-                let _8 := vloc__value_30
-                let expr_37 := _8
-                let expr_38 := checked_add_t_uint256(expr_36, expr_37)
+                let expr_48 := _7
+                let _8 := vloc__value_42
+                let expr_49 := _8
+                let expr_50 := checked_add_t_uint256(expr_48, expr_49)
 
-                let expr_40 := callvalue()
-                let expr_41 := checked_add_t_uint256(expr_38, expr_40)
+                let expr_52 := callvalue()
+                let expr_53 := checked_add_t_uint256(expr_50, expr_52)
 
-                update_storage_value_offset_0t_uint256_to_t_uint256(0x00, expr_41)
-                let expr_42 := expr_41
+                update_storage_value_offset_0t_uint256_to_t_uint256(0x00, expr_53)
+                let expr_54 := expr_53
                 let _9 := read_from_storage_split_offset_0_t_uint256(0x00)
-                let expr_44 := _9
-                vloc__33 := expr_44
+                let expr_56 := _9
+                vloc__45 := expr_56
                 leave
 
             }
 
-            function fun_sum_28(vloc_a_16, vloc_b_18) -> vloc_c_21 {
+            function fun_sum_40(vloc_a_28, vloc_b_30) -> vloc_c_33 {
                 let zero_value_for_type_t_uint256_3 := zero_value_for_split_t_uint256()
-                vloc_c_21 := zero_value_for_type_t_uint256_3
+                vloc_c_33 := zero_value_for_type_t_uint256_3
 
-                let _4 := vloc_a_16
-                let expr_23 := _4
-                let _5 := vloc_b_18
-                let expr_24 := _5
-                let expr_25 := checked_add_t_uint256(expr_23, expr_24)
+                let _4 := vloc_a_28
+                let expr_35 := _4
+                let _5 := vloc_b_30
+                let expr_36 := _5
+                let expr_37 := checked_add_t_uint256(expr_35, expr_36)
 
-                vloc_c_21 := expr_25
+                vloc_c_33 := expr_37
                 leave
 
             }
 
-            function fun_testAddress_14(vloc_addr_6) -> vloc_c_9 {
+            function fun_testAddress_26(vloc_addr_18) -> vloc_c_21 {
                 let zero_value_for_type_t_address_1 := zero_value_for_split_t_address()
-                vloc_c_9 := zero_value_for_type_t_address_1
+                vloc_c_21 := zero_value_for_type_t_address_1
 
-                let _2 := vloc_addr_6
-                let expr_11 := _2
-                vloc_c_9 := expr_11
+                let _2 := vloc_addr_18
+                let expr_23 := _2
+                vloc_c_21 := expr_23
                 leave
 
             }
@@ -326,6 +388,15 @@ object "c10_63" {
             function getter_fun_value_4() -> ret {
 
                 let slot := 0
+                let offset := 0
+
+                ret := read_from_storage_split_dynamic_t_uint256(slot, offset)
+
+            }
+
+            function getter_fun_valueb_6() -> ret {
+
+                let slot := 1
                 let offset := 0
 
                 ret := read_from_storage_split_dynamic_t_uint256(slot, offset)
