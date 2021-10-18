@@ -46,6 +46,21 @@ const coefs = {
       "v": 15000,
       "d": "Once per SSTORE operation for clearing an originally existing storage slot"
     },
+    // COLD_SLOAD_COST
+    "coldSloadCostEIP2929": {
+        "v": 2100,
+        "d": "",
+    },
+    // COLD_ACCOUNT_ACCESS_COST
+    "coldAccountAccessCostEIP2929": {
+        "v": 2600,
+        "d": "",
+    },
+    // WARM_STORAGE_READ_COST
+    "warmStorageReadCostEIP2929": {
+        "v": 100,
+        "d": "",
+    },
 }
 const _gasPrices = [
     ['Gzero',0,' Nothing paid for operations of the set Wzero.'],
@@ -122,29 +137,19 @@ function getPrice (name, options) {
     return price;
 }
 
-const special = {
-    extcodesize: () => {
-        let baseFee = toBN(gasPrices.Gextcode.value);
-        return {baseFee};
-    },
-    balance: ({} = {}) => {
-        let baseFee = toBN(gasPrices.Gbalance.value);
-        return {baseFee};
-    },
-    sload: () => {
-        let baseFee = toBN(gasPrices.Gsload.value);
-        return {baseFee};
-    },
-    exp: ({exponent}) => {
-        let baseFee = toBN(gasPrices.Gexp.value);
-        const byteLength = exponent.byteLength();
-        if (byteLength < 1 || byteLength > 32) {
-            console.error('', byteLength, exponent.toString());
-            // throw new Error(ERROR.OUT_OF_RANGE);
-        }
-        const addl = toBN(byteLength).muln(gasPrices.Gexpbyte.value);
-        return {baseFee, addl};
-    },
+const baseFee = {
+    balance: {baseFee: () => toBN(gasPrices.Gbalance.value)},
+    call: {baseFee: () => toBN(gasPrices.Gcall.value)},
+    callcode: {baseFee: eip2929.call.baseFee},
+    staticcall: {baseFee: eip2929.call.baseFee},
+    delegatecall: {baseFee: eip2929.call.baseFee},
+    extcodesize: {baseFee: () => toBN(gasPrices.Gextcode.value)},
+    extcodehash: {baseFee: () => toBN(gasPrices.Gextcode.value)},
+    extcodecopy: {baseFee: () => toBN(gasPrices.Gextcode.value)},
+    sload: {baseFee: () => toBN(gasPrices.Gsload.value)},
+}
+
+const EIP2200 = {
     sstore: ({count, value, currentValue, origValue, gasLeft}) => {
         const baseFee = 0;
         let addl = 0, refund = 0;
@@ -179,6 +184,57 @@ const special = {
         }
 
         return {baseFee, addl, refund};
+    },
+}
+
+const eip2929 = {
+    balance: {
+        baseFee: ({accessed} = {}) => {
+            if (accessed) return toBN(coefs.warmStorageReadCostEIP2929.v);
+            return toBN(coefs.coldAccountAccessCostEIP2929);
+        }
+    },
+    call: {baseFee: eip2929.balance.baseFee},
+    callcode: {baseFee: eip2929.call.baseFee},
+    staticcall: {baseFee: eip2929.call.baseFee},
+    delegatecall: {baseFee: eip2929.call.baseFee},
+    extcodesize: {baseFee: eip2929.balance.baseFee},
+    extcodehash: {baseFee: eip2929.balance.baseFee},
+    extcodecopy: {baseFee: eip2929.balance.baseFee},
+    sload: {
+        // coefs.coldSloadCostEIP2929.v;
+    }
+}
+
+const special = {
+    extcodesize: () => {
+        let baseFee = eip2929.extcodesize.baseFee();
+        return {baseFee};
+    },
+    extcodehash: () => {
+        let baseFee = eip2929.extcodesize.baseFee();
+        return {baseFee};
+    },
+    sload: () => {
+        let baseFee = eip2929.sload.baseFee();
+        return {baseFee};
+    },
+    balance: ({} = {}) => {
+        let baseFee = eip2929.balance.baseFee();
+        return {baseFee};
+    },
+    exp: ({exponent}) => {
+        let baseFee = toBN(gasPrices.Gexp.value);
+        const byteLength = exponent.byteLength();
+        if (byteLength < 1 || byteLength > 32) {
+            console.error('', byteLength, exponent.toString());
+            // throw new Error(ERROR.OUT_OF_RANGE);
+        }
+        const addl = toBN(byteLength).muln(gasPrices.Gexpbyte.value);
+        return {baseFee, addl};
+    },
+    sstore: ({count, value, currentValue, origValue, gasLeft}) => {
+        return EIP2200.sstore({count, value, currentValue, origValue, gasLeft});
     },
     mstore: ({offset, length, memWordCount, highestMemCost}) => {
         let baseFee = toBN(gasPrices.Gverylow.value);
@@ -219,7 +275,7 @@ const special = {
     },
     extcodecopy: ({offset, length, memWordCount, highestMemCost}) => {
         const changed = subMemUsage({offset, length, memWordCount, highestMemCost});
-        changed.baseFee = toBN(gasPrices.Gextcode.value);
+        changed.baseFee = eip2929.extcodesize.baseFee();
 
         if (!length.eqn(0)) {
             addl = toBN(gasPrices.Gcopy.value).imul(divCeil(length, toBN(32)));
@@ -246,23 +302,23 @@ const special = {
         return {baseFee, addl};
     },
     call: ({value}) => {
-        const baseFee = toBN(gasPrices.Gcall.value);
+        const baseFee = eip2929.call.baseFee();
         let addl = toBN(0);
         if (!value.eqn(0)) addl = addl.addn(gasPrices.Gcallvalue.value);
         return {baseFee, addl};
     },
     callcode: ({value}) => {
-        const baseFee = toBN(gasPrices.Gcall.value);
+        const baseFee = eip2929.call.baseFee();
         let addl = toBN(0);
         if (!value.eqn(0)) addl = addl.addn(gasPrices.Gcallvalue.value);
         return {baseFee, addl};
     },
     staticcall: () => {
-        const baseFee = toBN(gasPrices.Gcall.value);
+        const baseFee = eip2929.call.baseFee();
         return {baseFee};
     },
     delegatecall: () => {
-        const baseFee = toBN(gasPrices.Gcall.value);
+        const baseFee = eip2929.call.baseFee();
         return {baseFee};
     },
 }

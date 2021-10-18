@@ -10,7 +10,7 @@ const { Chain, Hardfork, default: Common } = require('@ethereumjs/common');
 const { Address } = require('ethereumjs-util');
 const VM = require('@ethereumjs/vm').default;
 
-const common = new Common({ chain: Chain.Mainnet, hardfork: Hardfork.Istanbul })
+const common = new Common({ chain: Chain.Mainnet, hardfork: Hardfork.Berlin })
 const othervm = new VM({ common });
 
 async function getOtherVMResult (code, data, address) {

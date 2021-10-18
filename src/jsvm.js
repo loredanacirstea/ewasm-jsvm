@@ -44,6 +44,12 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
         const cache = _getCache();
         const clonedContext = cloneContext(cache.context);
         const clonedLogs = cloneLogs(_getCache().logs);
+        const accessed_storage_keys = {};
+        const accessed_addresses = {
+            [txInfo.from]: true,
+            [txInfo.to]: true,
+            // TODO: all precompiles,
+        };
 
         const getCache = () => {
             return {
