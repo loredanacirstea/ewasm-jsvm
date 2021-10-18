@@ -358,8 +358,7 @@ function instance ({
             calldata = signature ? encodeWithSignature(signature, calldataTypes, args) : encode(calldataTypes, args);
         }
 
-        // if (!signature && !fabi && txInfo.data.length === 0) {
-        if (!signature && !fabi && !encodeInput) {
+        if (fname === 'constructor') {
             // constructor
             txInfo.data = new Uint8Array([...bytecode, ...calldata]);
         }
