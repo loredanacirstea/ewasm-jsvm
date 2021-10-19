@@ -233,6 +233,7 @@ function instance ({
             data: typeof txInfo.data === 'string' ? hexToUint8Array(txInfo.data) : txInfo.data,
             cache
         };
+        currentPromise.data = currentPromise.data || new Uint8Array([]);
         currentPromise.txInfo.data = currentPromise.data;
         currentPromise.txInfo.to = address;
         if (!currentPromise.cache.context[txInfo.to]) {
@@ -355,9 +356,16 @@ function instance ({
         if (encodeInput) calldata = encodeInput(args, fabi);
         else {
             const calldataTypes = (wabi.find(abi => abi.name === fname || (abi.type === fname && fname === 'constructor')) || {}).inputs;
-            calldata = signature ? encodeWithSignature(signature, calldataTypes, args) : encode(calldataTypes, args);
-        }
 
+            // If there is no function ABI and only one argument, we assume it is the ABI encoded calldata
+            if (calldataTypes.length !== args.length && args.length === 1) {
+                calldata = args[0];
+                if (typeof calldata === 'string') calldata = hexToUint8Array(calldata);
+            }
+            else {
+                calldata = signature ? encodeWithSignature(signature, calldataTypes, args) : encode(calldataTypes, args);
+            }
+        }
         if (fname === 'constructor') {
             // constructor
             txInfo.data = new Uint8Array([...bytecode, ...calldata]);
