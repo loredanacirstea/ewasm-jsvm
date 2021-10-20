@@ -462,9 +462,17 @@ describe.each([
         expect(runtime.gas.used.toNumber()).toBe(o.results.gasUsed.toNumber() + BASE_TX_COST);
     });
 
-    it('test c10 - deploy args', async function () {
+    it('test c10 - deploy args1', async function () {
         const noconstructorAbi = contracts.c10.abi.filter(v => v.name !== 'constructor');
         const runtime = await jsvm.deploy(contracts.c10[field], noconstructorAbi)('0x000000000000000000000000000000000000000000000000000000000000000f', {...DEFAULT_TX_INFO, gasLimit: 6000000});
+
+        let valueb = (await runtime.valueb(DEFAULT_TX_INFO))[0].toNumber();
+        expect(valueb).toBe(15);
+    });
+
+    it('test c10 - deploy args2', async function () {
+        const noconstructorAbi = contracts.c10.abi.filter(v => v.name !== 'constructor');
+        const runtime = await jsvm.deploy(contracts.c10[field] + '000000000000000000000000000000000000000000000000000000000000000f', noconstructorAbi)({...DEFAULT_TX_INFO, gasLimit: 6000000});
 
         let valueb = (await runtime.valueb(DEFAULT_TX_INFO))[0].toNumber();
         expect(valueb).toBe(15);
