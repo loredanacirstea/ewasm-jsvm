@@ -195,7 +195,9 @@ function instance ({
 
             if (!cachedtx || !cachedtx.result) return;
             Object.keys(cachedtx).forEach(key => {
-                if (key !== 'result' && comparify(cachedtx[key]) !== comparify(hexdata[key])) throw new Error(`Cache doesn't match data for key ${key}. Cache: ${cachedtx[key]} vs. ${hexdata[key]}`);
+                if (key !== 'result' && key !== 'storageInitializeZero' && comparify(cachedtx[key]) !== comparify(hexdata[key])) {
+                    throw new Error(`Cache doesn't match data for key ${key}. Cache: ${cachedtx[key]} vs. ${hexdata[key]}`);
+                }
             });
             return cachedtx;
         }
@@ -271,6 +273,7 @@ function instance ({
 
         const internalCallWrap = (index, dataObj, context, logs) => {
             const newtx = {...currentPromise.txInfo, ...lowtx2hex(dataObj)}
+            newtx.storageInitializeZero = !stateProvider;
             currentPromise.parent = true;
             currentPromise.interruptTxObj = { index, newtx, context, logs };
             ilogger.debug('internalCallWrap');
