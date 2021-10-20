@@ -66,14 +66,18 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 // execution stops here
                 throw new Error(ERROR.ASYNC_RESOURCE);
             }
+            function throwIf(account, key) {
+                if (txObj.storageInitializeZero) return hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
+                // original account, without current changes
+                asyncResourceWrap(cache.context[account], [key]);
+                // execution stops here
+                throw new Error(ERROR.ASYNC_RESOURCE);
+            }
             result.getStorageOriginal = (key) => {
                 const value = cache.context[account].storage[key];
                 if (typeof value === 'undefined') {
                     Logger.get('jsvm').debug('asyncResourceWrap', account, key);
-                    // original account, without current changes
-                    asyncResourceWrap(cache.context[account], [key]);
-                    // execution stops here
-                    throw new Error(ERROR.ASYNC_RESOURCE);
+                    return throwIf(account, key);
                 }
                 return value;
             }
@@ -81,21 +85,15 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 const value = result.storage[key];
                 if (typeof value === 'undefined') {
                     Logger.get('jsvm').debug('asyncResourceWrap', account, key);
-                    // original account, without current changes
-                    asyncResourceWrap(cache.context[account], [key]);
-                    // execution stops here
-                    throw new Error(ERROR.ASYNC_RESOURCE);
+                    return throwIf(account, key);
                 }
                 return value;
             }
             result.setStorage = (key, value) => {
-                const oldvalue = result.storage[key];
+                let oldvalue = result.storage[key];
                 if (typeof oldvalue === 'undefined') {
                     Logger.get('jsvm').debug('asyncResourceWrap', account, key);
-                    // original account, without current changes
-                    asyncResourceWrap(cache.context[account], [key]);
-                    // execution stops here
-                    throw new Error(ERROR.ASYNC_RESOURCE);
+                    oldvalue = throwIf(account, key);
                 }
                 result.storage[key] = value;
                 persistenceWrap.set(result);

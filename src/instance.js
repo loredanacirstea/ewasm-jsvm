@@ -224,6 +224,7 @@ function instance ({
         cache.context[txInfo.from].empty = false;
         cache.context[txInfo.to].empty = false;
         txInfo.gasUsed = toBN(BASE_TX_COST);
+        txInfo.storageInitializeZero = !stateProvider;
 
         let currentPromise = {
             resolve, reject,
@@ -231,7 +232,7 @@ function instance ({
             methodName: entrypoint ? entrypoint(fabi) : 'main',
             txInfo,
             data: typeof txInfo.data === 'string' ? hexToUint8Array(txInfo.data) : txInfo.data,
-            cache
+            cache,
         };
         currentPromise.data = currentPromise.data || new Uint8Array([]);
         currentPromise.txInfo.data = currentPromise.data;
