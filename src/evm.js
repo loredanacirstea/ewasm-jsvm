@@ -633,7 +633,9 @@ const initializeImports = (
         div: (a, b, {stack, position}) => {
             const gasCost = getPrice('div');
             jsvm_env.useGas(gasCost);
-            const result = a.abs().div(b.abs());
+            let result;
+            if (b.isZero()) result = toBN(0);
+            else result = a.abs().div(b.abs());
             stack.push(result);
             logger.debug('DIV', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
@@ -641,7 +643,11 @@ const initializeImports = (
         sdiv: (a, b, {stack, position}) => {
             const gasCost = getPrice('sdiv');
             jsvm_env.useGas(gasCost);
-            const result = a.div(b);
+            let result;
+            const _a = a.fromTwos(256);
+            const _b = b.fromTwos(256);
+            if (_b.isZero()) result = toBN(0);
+            else result = _a.div(_b);
             stack.push(result);
             logger.debug('SDIV', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
@@ -657,7 +663,11 @@ const initializeImports = (
         smod: (a, b, {stack, position}) => {
             const gasCost = getPrice('smod');
             jsvm_env.useGas(gasCost);
-            const result = a.mod(b);
+            let result;
+            const _a = a.fromTwos(256);
+            const _b = b.fromTwos(256);
+            if (_b.isZero()) result = toBN(0);
+            else result = _a.mod(_b);
             stack.push(result);
             logger.debug('SMOD', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
