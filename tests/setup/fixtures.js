@@ -84,8 +84,9 @@ const c10 = [
     { name: 'valueb', type: 'function', inputs: [], outputs: [{ name: 'b', type: 'uint256'}]},
     { name: 'addvalue', type: 'function', inputs: [{ name: '_value', type: 'uint256'}], outputs: [{ name: 'b', type: 'uint256'}]},
     { name: '_revert', type: 'function', inputs: [], outputs: []},
-
     { name: 'testAddress', type: 'function', inputs: [{ name: 'addr', type: 'address'}], outputs: [{ name: 'addr', type: 'address'}]},
+    { name: 'testint', type: 'function', inputs: [{ name: 'a', type: 'uint256'}], outputs: []},
+    { name: 'anint', type: 'function', inputs: [], outputs: [{ name: 'anint', type: 'int256'}]},
 ]
 
 const c12 = [

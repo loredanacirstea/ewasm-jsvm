@@ -717,7 +717,9 @@ const initializeImports = (
         slt: (a, b, {stack, position}) => {
             const gasCost = getPrice('slt');
             jsvm_env.useGas(gasCost);
-            let result = a.lt(b);
+            const _a = a.fromTwos(256);
+            const _b = b.fromTwos(256);
+            let result = _a.lt(_b);
             result = toBN(result ? 1 : 0);
             stack.push(result);
             logger.debug('SLT', [a, b], [result], getCache(), stack, undefined, position, gasCost);
@@ -726,7 +728,9 @@ const initializeImports = (
         sgt: (a, b, {stack, position}) => {
             const gasCost = getPrice('sgt');
             jsvm_env.useGas(gasCost);
-            let result = a.gt(b);
+            const _a = a.fromTwos(256);
+            const _b = b.fromTwos(256);
+            let result = _a.gt(_b);
             result = toBN(result ? 1 : 0);
             stack.push(result);
             logger.debug('SGT', [a, b], [result], getCache(), stack, undefined, position, gasCost);

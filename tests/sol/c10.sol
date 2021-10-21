@@ -3,6 +3,7 @@ pragma solidity ^0.7.0;
 contract c10 {
     uint256 public value = 5;
     uint256 public valueb;
+    int256 public anint = 100;
 
     constructor (uint256 _valueb) {
         valueb = _valueb;
@@ -24,5 +25,9 @@ contract c10 {
     function _revert() public payable returns (uint256) {
         value = value + 10;
         revert();
+    }
+
+    function testint(uint256 a) public {
+        anint -= int256(a);
     }
 }

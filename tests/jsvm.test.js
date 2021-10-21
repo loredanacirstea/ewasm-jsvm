@@ -486,6 +486,14 @@ describe.each([
         let valueb = (await runtime.valueb(DEFAULT_TX_INFO))[0].toNumber();
         expect(valueb).toBe(15);
 
+        // Test slt(100, 7) -> slt(0x0000000000000000000000000000000000000000000000000000000000000064, 0x8000000000000000000000000000000000000000000000000000000000000007)
+        let anint = (await runtime.anint(DEFAULT_TX_INFO))[0].toNumber();
+        expect(anint).toBe(100);
+
+        await runtime.testint(7, DEFAULT_TX_INFO);
+        anint = (await runtime.anint(DEFAULT_TX_INFO))[0].toNumber();
+        expect(anint).toBe(100 - 7);
+
         let answ = await runtime.sum(8, 2, DEFAULT_TX_INFO);
         expect(answ.c.toNumber()).toBe(10);
         o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
