@@ -13,7 +13,7 @@ const VM = require('@ethereumjs/vm').default;
 const common = new Common({ chain: Chain.Mainnet, hardfork: Hardfork.Istanbul })
 const othervm = new VM({ common });
 
-async function getOtherVMResult (code, data, address) {
+async function getOtherVMResult (code, data, address, gasLimit = 3000000) {
     const steps = [];
     othervm.on('step', function (data) {
         steps.push({
@@ -26,10 +26,10 @@ async function getOtherVMResult (code, data, address) {
         });
     });
     const results = await othervm.runCode({
-        address: address ? Address.fromString(address) : undefined,
+        address: address ? Address.fromString(address) : null,
         code: Buffer.from(code),
         data: Buffer.from(data),
-        gasLimit: toBN(3000000),
+        gasLimit: toBN(gasLimit),
     });
     return {results, steps};
 }

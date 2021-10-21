@@ -79,9 +79,9 @@ const isBinWasm = uint8Array => uint8Array[0] === 0 && uint8Array[1] === 97 && u
 
 const uint8arrToBN = uint8arr => new BN(strip0x(uint8ArrayToHex(uint8arr)), 16);
 const BN2hex = n => n.toString(16).padStart(64, '0');
-const BN2uint8arr = n => {
-    const res = BN2hex(n);
-    return hexToUint8Array(res);
+const BN2uint8arr = (n, length = 32) => {
+    length = length >= n.byteLength() ? length : n.byteLength();
+    return n.toArray('be', length);
 }
 const toBN = n => {
     // from hex

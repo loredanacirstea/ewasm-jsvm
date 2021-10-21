@@ -54,9 +54,16 @@ function instance ({
         ilogger.debug('deploy', ...args);
         address = address || randomAddress();
         const constructori = await initializeWrap(bytecode, wabi, address, false);
-        await constructori.main(...args);
+        try {
+            await constructori.main(...args);
+        } catch (e) {
+            e.runtime = constructori;
+            throw e;
+        }
         ilogger.debug('deployed', address);
         const instance = await runtime(address, wabi);
+        instance.logs = constructori.logs;
+        instance.gas = constructori.gas;
         return instance;
     }
 
@@ -91,6 +98,7 @@ function instance ({
         }
         const appendtxinfo = (obj) => {
             Object.assign(wrappedInstance, obj);
+            return wrappedInstance;
         }
 
         const _finishAction = finishAction(ilogger, vmcore.persistence, address, wabi, appendtxinfo);
@@ -122,7 +130,7 @@ function instance ({
 
     const _storeStateChanges = storeStateChanges(ilogger, vmcore.persistence);
 
-    const finishAction = (ilogger, persistence, address, wabi, appendtxinfo) => currentPromise => ({result: answ, gas, context, logs}, e) => {
+    const finishAction = (ilogger, persistence, address, wabi, appendtxinfo) => currentPromise => ({result: answ, gas, context = {}, logs}, e) => {
         if (!currentPromise) {
             console.log('No queued promise found.'); // throw new Error('No queued promise found.');
             return;
@@ -134,6 +142,7 @@ function instance ({
         let result;
         if (currentPromise.name === 'constructor') {
             // ilogger.get('finishAction_constructor').debug(currentPromise.name, answ);
+            if (!context[address]) context[address] = {};
             context[address].runtimeCode = answ;
             result = address;
         } else {
