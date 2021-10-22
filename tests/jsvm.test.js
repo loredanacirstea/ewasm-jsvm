@@ -270,6 +270,9 @@ describe.each([
         const answ = await runtime.main({...DEFAULT_TX_INFO});
         expect(answ.val.toNumber()).toBe(999999);
 
+        const lastL = runtime.logs[runtime.logs.length - 1];
+        expect(uint8ArrayToHex(runtime.bin)).toBe(uint8ArrayToHex(lastL.context[lastL.contractAddress].runtimeCode));
+
         let o = await getOtherVMResult(runtime.bin, runtime.txInfo.data);
         expect(runtime.logs.length - 1).toBe(o.steps.length);
         checkInstructionGas(runtime.logs.slice(1), o.steps);

@@ -901,6 +901,10 @@ const initializeImports = (
             logger.debug('POP', [], [], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
+        // helpers
+        getGas: () => {
+            return jsvm_env.getGas();
+        }
     }
 
     return api;

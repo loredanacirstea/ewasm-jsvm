@@ -483,6 +483,7 @@ function instance ({
         getLogs: () => vmcore.persistence.logs,
         // dev purposes
         getPersistence: () => vmcore.persistence.accounts,
+        setContext: _storeStateChanges,
     }
 
     return vmapi;
@@ -514,13 +515,12 @@ const ologger = (callback, address) => logg('opcodes', Logger.LEVELS.DEBUG, (...
     const {context, logs, data} = cache;
     const clonedContext = cloneContext(context);
     const clonedLogs =  cloneLogs(logs);
-    const currentContext = clonedContext[address] || {};
     const clonedStack = stack ? stack.map(val => {
         // BN or array
         return val instanceof Uint8Array ? val : BN2uint8arr(val);
     }) : [];
 
-    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contract: currentContext, stack: clonedStack, changed, position: position || 0, gasCost, addlGasCost, refundedGas};
+    const log = {name, input, output, logs: clonedLogs, context: clonedContext, contractAddress: address, stack: clonedStack, changed, position: position || 0, gasCost, addlGasCost, refundedGas};
     callback(log);
 
     if (Logger.getLevel() === 'DEBUG') return log;

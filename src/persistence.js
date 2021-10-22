@@ -6,11 +6,20 @@ const persistenceMock = (accounts = {}) => {
     // runtimeCode null - address not set / selfdestructed
     // runtimeCode.length === 0 - address set, not contract
 
+    const format = (_account) => {
+        const account = {..._account};
+        if (typeof account.address !== 'string' || account.address.slice(0, 2) !== '0x' || account.address.length !== 42) throw new Error('invalid Ethereum address');
+        if (typeof account.runtimeCode === 'string') account.runtimeCode = hexToUint8Array(account.runtimeCode);
+        account.balance = toBN(account.balance);
+        return account;
+    }
+
     const get = address => cloneContract(accounts[address] || emptyAccount(address));
 
-    const set = ({ address, runtimeCode, storage, balance = 0, removed }) => {
+    const set = (account) => {
         // pathToWasm ?
-        address = address || randomAddress();
+        account.address = account.address || randomAddress();
+        let { address, runtimeCode, storage, balance = 0, removed } = format(account);
         // if (accounts[address]) throw new Error('Address already exists');
 
         storage = storage || (runtimeCode ? {} : null);
@@ -43,7 +52,7 @@ const persistenceMock = (accounts = {}) => {
 
     const setBulk = (accounts = {}) => {
         Object.keys(accounts).forEach(addr => {
-            set(cloneContract(accounts[addr]));
+            set(cloneContract(format(accounts[addr])));
         })
     }
 

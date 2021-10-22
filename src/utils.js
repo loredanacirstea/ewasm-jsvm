@@ -17,6 +17,7 @@ const uint8ArrayToHex = uint8arr => ethers.utils.hexlify(uint8arr);
 
 const decode = (types, uint8arr) => {
     const decoded = ethers.utils.defaultAbiCoder.decode(types, uint8ArrayToHex(uint8arr));
+    if (decoded instanceof Array && decoded.length === 1 && !types[0].name) return decoded[0];
     return {...decoded};
 }
 
