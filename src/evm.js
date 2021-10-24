@@ -885,7 +885,8 @@ const initializeImports = (
             jsvm_env.useGas(gasCost);
             const _position = position;
             newpos = newpos.toNumber();
-            if (condition.toNumber() === 1) position = newpos;
+            // EVM allows any uint256 except from 0 to be interpreted as true
+            if (!condition.eqn(0)) position = newpos;
             logger.debug('JUMPI', [condition, newpos], [], getCache(), stack, undefined, _position, gasCost);
             return {stack, position};
         },
