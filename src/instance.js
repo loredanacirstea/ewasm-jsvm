@@ -32,6 +32,7 @@ function instance ({
     // persistence = {accounts, logs, blocks}
     // Internal logger
     const ilogger = Logger.get(vmname);
+    let blockCheckpoint;
 
     const getResource = async (address, stateProvider) => {
         if (!address) throw new Error('getResource address missing');
@@ -39,8 +40,8 @@ function instance ({
         // Get account data from provider
         if (data.empty && stateProvider) {
             ilogger.get('getResource').debug(address);
-            const runtimeCode = await stateProvider.getCode(address);
-            const balance = await stateProvider.getBalance(address);
+            const runtimeCode = await stateProvider.getCode(address, blockCheckpoint);
+            const balance = await stateProvider.getBalance(address, blockCheckpoint);
             data.runtimeCode = typeof runtimeCode === 'string' ? hexToUint8Array(runtimeCode) : runtimeCode;
             data.balance = toBN(balance);
 
@@ -77,6 +78,34 @@ function instance ({
     const runtimeSim = (bytecode, wabi, address) => {
         address = address || randomAddress();
         return initializeWrap(bytecode, wabi, address, true);
+    }
+
+    // TODO if there are other tx touching the contract, executed before this one, they need to be simulated too
+    const simulateTransaction = async (txHash) => {
+        const transaction = await stateProvider.getTransaction(txHash);
+        const {blockNumber, data, value, from, to, gasLimit, gasPrice} = transaction;
+        const runtimeBytecode = await stateProvider.getCode(to, blockNumber);
+        blockCheckpoint = blockNumber - 1;
+
+        const runtime = await runtimeSim(runtimeBytecode, [], to);
+        const tx = {
+            data,
+            value: toBN(value.toHexString()),
+            from,
+            to,
+            gasLimit: toBN(gasLimit.toHexString()).add(toBN(100000)),
+            gasPrice: toBN(gasPrice.toHexString()),
+        };
+        try {
+            const result = await runtime.mainRaw(tx);
+            blockCheckpoint = null;
+            runtime.result = result;
+            return runtime;
+        } catch(e) {
+            blockCheckpoint = null;
+            e.runtime = runtime;
+            throw e;
+        }
     }
 
     async function initializeWrap (bytecode, wabi=[], address, atRuntime = false) {
@@ -333,7 +362,7 @@ function instance ({
                 for (let key of storageKeys) {
                     let value;
                     if (stateProvider) {
-                        value = await stateProvider.getStorageAt(account, key);
+                        value = await stateProvider.getStorageAt(account, key, blockCheckpoint);
                     }
                     else {
                         value = '0x0000000000000000000000000000000000000000000000000000000000000000';
@@ -484,6 +513,7 @@ function instance ({
         // dev purposes
         getPersistence: () => vmcore.persistence.accounts,
         setContext: _storeStateChanges,
+        simulateTransaction,
     }
 
     return vmapi;
