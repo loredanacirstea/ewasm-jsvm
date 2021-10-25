@@ -243,7 +243,6 @@ describe.each([
             const entry = ewasmjsvm.getPersistence().get(account.address);
             expect(entry.balance.toNumber()).toBe(account.balance);
 
-
             evmjs.getPersistence().set(account);
             const entry2 = evmjs.getPersistence().get(account.address);
             expect(entry2.balance.toNumber()).toBe(account.balance);
@@ -599,6 +598,103 @@ describe.each([
     });
 
 });
+
+it('simulateTransaction from tx hash', async function () {
+    const providerName = 'rinkeby';
+    const hash = '0x8fb25b0f50df098f7a189ae34c0f8d62fc753dcacd4532b055326072577ef38e';
+    const provider = ethers.providers.getDefaultProvider(providerName);
+    const evmjs = _evmjs({provider});
+    const runtime = await evmjs.simulateTransaction(hash).catch(e => e.runtime);
+    const AL = uint8ArrayToHex(await runtime.mainRaw({
+        data: '0xee46b52d',
+        from: runtime.txInfo.from,
+        to: runtime.txInfo.to,
+        value: toBN(0),
+    }));
+    const balance = await runtime.mainRaw({
+        data: '0x1f14df69' + '000000000000000000000000' + runtime.txInfo.from.slice(2) + AL.slice(2),
+        from: runtime.txInfo.from,
+        to: runtime.txInfo.to,
+        value: toBN(0),
+    });
+    expect(uint8ArrayToHex(balance)).toBe('0x0000000000000000000000000000000000000000000000000000000000053020');
+
+}, 50000);
+
+it('simulateTransaction with initial states', async function () {
+    const providerName = 'rinkeby';
+    const hash = '0x8fb25b0f50df098f7a189ae34c0f8d62fc753dcacd4532b055326072577ef38e';
+    const ALBalanceStorageKey = '0xda708552cdeb2cc9614cfb96e57d63181beb1979a39be45d9f0c35fe9a51e855';
+    const provider = ethers.providers.getDefaultProvider(providerName);
+    const evmjs = _evmjs();
+    const {runtime, transaction} = await evmjs.runtimeFromTransaction(hash, provider);
+    const initialALBalance = await provider.getStorageAt(runtime.address, ALBalanceStorageKey, runtime.blockNumber - 1);
+    const expectedALBalance = await provider.getStorageAt(runtime.address, ALBalanceStorageKey, runtime.blockNumber);
+    const storage = {
+        '0x79911e2faba13a7294a49689eebaab4d59ef3f5b890edcbf0d28e5173aceb2b5': '0x000000000000000000000000d6866368fcbe89bf10acf948bc5eb19b01e4df82',
+        '0x0000000000000000000000000000000000000000000000000000000000000000': '0x000000000000000000000000d6866368fcbe89bf10acf948bc5eb19b01e4df82',
+        '0x39e081f012a1649fce5496531c003f7f38fb7e7a4eef0bf64b15b01a8c74546b': '0x0000000000000000000000000000000000000000000000000000000000035b60',
+        '0xf06d282f967055cb1eee17e04aa005b9682a620f4bbcfaee55ba78607a3d87ae': '0x00000000000000000000000000000000000000000000000000000000000007d0',
+        '0x0000000000000000000000000000000000000000000000000000000000000002': '0xa7e8030f20d51298078da9ed202f23280c7cf8b6b49a999a7e9457f8f1938587',
+        '0xec061709de2491458f4c981032059d7d19b0e55f45018bac6b3e660bdc959a59': '0x00000000000000000000000000000000000000000000000000000000000005dc',
+        '0x0000000000000000000000000000000000000000000000000000000000000006': '0x00000000000000000000000000000000000000000000000000000000000003e8',
+        '0xcaff291fe014adc6b72a172705750b4cabe8f8667664d2924a166caab2885648': '0x0000000000000000000000000000000000000000000000000000000000000064',
+        '0xda708552cdeb2cc9614cfb96e57d63181beb1979a39be45d9f0c35fe9a51e855':
+        '0x0000000000000000000000000000000000000000000000000000000000002710',
+        '0x79dd35115d34011f9dcc309684ee67b0c2426ac60391dc07ebcde97d96533f6e': '0x0000000000000000000000000000000000000000000000000000000000038270',
+        "0x0000000000000000000000000000000000000000000000000000000000000001": "0x0000000000000000000000000000000000000000000000000000000000041eb0",
+    }
+    const currentAccounts = {
+        [runtime.address]: {
+            address: runtime.address,
+            runtimeCode: runtime.bin,
+            storage,
+        }
+    }
+    const ALTx = {
+        data: '0xee46b52d',
+        from: transaction.from,
+        to: transaction.to,
+        value: toBN(0),
+    }
+
+    evmjs.setContext({accounts: currentAccounts});
+
+    const AL = uint8ArrayToHex(await runtime.mainRaw(ALTx));
+    const balanceTx = {
+        data: '0x1f14df69' + '000000000000000000000000' + transaction.from.slice(2) + AL.slice(2),
+        from: transaction.from,
+        to: runtime.address,
+        value: toBN(0),
+    }
+
+    const balanceIni = await runtime.mainRaw(balanceTx);
+    expect(uint8ArrayToHex(balanceIni)).toBe(initialALBalance);
+    expect(uint8ArrayToHex(evmjs.getPersistence().get(runtime.address).storage['0x0000000000000000000000000000000000000000000000000000000000000001'])).toBe('0x0000000000000000000000000000000000000000000000000000000000041eb0');
+
+    expect(uint8ArrayToHex(evmjs.getPersistence().get(runtime.address).storage['0x39e081f012a1649fce5496531c003f7f38fb7e7a4eef0bf64b15b01a8c74546b'])).toBe('0x0000000000000000000000000000000000000000000000000000000000035b60');
+
+    expect(uint8ArrayToHex(evmjs.getPersistence().get(runtime.address).storage['0x79dd35115d34011f9dcc309684ee67b0c2426ac60391dc07ebcde97d96533f6e'])).toBe('0x0000000000000000000000000000000000000000000000000000000000038270');
+
+    expect(uint8ArrayToHex(evmjs.getPersistence().get(runtime.address).storage['0xda708552cdeb2cc9614cfb96e57d63181beb1979a39be45d9f0c35fe9a51e855'])).toBe('0x0000000000000000000000000000000000000000000000000000000000002710');
+
+    await runtime.mainRaw(transaction);
+
+    const balance = await runtime.mainRaw(balanceTx);
+    const balanceHex = uint8ArrayToHex(balance);
+    expect(balanceHex).toBe(expectedALBalance);
+    expect(balanceHex).toBe('0x0000000000000000000000000000000000000000000000000000000000053020');
+
+    expect(uint8ArrayToHex(evmjs.getPersistence().get(runtime.address).storage['0x0000000000000000000000000000000000000000000000000000000000000001'])).toBe('0x000000000000000000000000000000000000000000000000000000000005cc60');
+
+    expect(uint8ArrayToHex(evmjs.getPersistence().get(runtime.address).storage['0x39e081f012a1649fce5496531c003f7f38fb7e7a4eef0bf64b15b01a8c74546b'])).toBe('0x0000000000000000000000000000000000000000000000000000000000000000');
+
+    expect(uint8ArrayToHex(evmjs.getPersistence().get(runtime.address).storage['0x79dd35115d34011f9dcc309684ee67b0c2426ac60391dc07ebcde97d96533f6e'])).toBe('0x0000000000000000000000000000000000000000000000000000000000053020');
+
+    expect(uint8ArrayToHex(evmjs.getPersistence().get(runtime.address).storage['0xda708552cdeb2cc9614cfb96e57d63181beb1979a39be45d9f0c35fe9a51e855'])).toBe('0x0000000000000000000000000000000000000000000000000000000000053020');
+
+    expect(uint8ArrayToHex(evmjs.getPersistence().get(runtime.address).storage['0xe2ef2be5029fc4cbcba12118a35c1c437888c9f0c45bd599b391d2a691586260'])).toBe('0x00000000000000000000000000000000000000000000000000000000000080e8');
+}, 400000);
 
 it.skip('test taylor', async function () {
     let answ, data;

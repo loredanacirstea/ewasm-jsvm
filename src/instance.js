@@ -80,15 +80,16 @@ function instance ({
         return initializeWrap(bytecode, wabi, address, true);
     }
 
-    // TODO if there are other tx touching the contract, executed before this one, they need to be simulated too
-    const simulateTransaction = async (txHash) => {
-        const transaction = await stateProvider.getTransaction(txHash);
-        const {blockNumber, data, value, from, to, gasLimit, gasPrice} = transaction;
-        const runtimeBytecode = await stateProvider.getCode(to, blockNumber);
+    const runtimeFromTransaction = async (txHash, provider) => {
+        provider = provider || stateProvider;
+        const tx = await provider.getTransaction(txHash);
+        const {blockNumber, data, value, from, to, gasLimit, gasPrice} = tx;
+        const runtimeBytecode = await provider.getCode(to, blockNumber);
         blockCheckpoint = blockNumber - 1;
 
         const runtime = await runtimeSim(runtimeBytecode, [], to);
-        const tx = {
+        runtime.blockNumber = blockNumber;
+        const transaction = {
             data,
             value: toBN(value.toHexString()),
             from,
@@ -96,8 +97,14 @@ function instance ({
             gasLimit: toBN(gasLimit.toHexString()).add(toBN(100000)),
             gasPrice: toBN(gasPrice.toHexString()),
         };
+        return {runtime, transaction};
+    }
+
+    // TODO if there are other tx touching the contract, executed before this one, they need to be simulated too
+    const simulateTransaction = async (txHash) => {
+        const {runtime, transaction} = await runtimeFromTransaction(txHash);
         try {
-            const result = await runtime.mainRaw(tx);
+            const result = await runtime.mainRaw(transaction);
             blockCheckpoint = null;
             runtime.result = result;
             return runtime;
@@ -514,6 +521,7 @@ function instance ({
         getPersistence: () => vmcore.persistence.accounts,
         setContext: _storeStateChanges,
         simulateTransaction,
+        runtimeFromTransaction,
     }
 
     return vmapi;

@@ -67,7 +67,9 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 throw new Error(ERROR.ASYNC_RESOURCE);
             }
             function throwIf(account, key) {
-                if (txObj.storageInitializeZero) return hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
+                if (txObj.storageInitializeZero) {
+                    return hexToUint8Array('0x0000000000000000000000000000000000000000000000000000000000000000');
+                }
                 // original account, without current changes
                 asyncResourceWrap(cache.context[account], [key]);
                 // execution stops here
@@ -77,7 +79,10 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 const value = cache.context[account].storage[key];
                 if (typeof value === 'undefined') {
                     Logger.get('jsvm').debug('asyncResourceWrap', account, key);
-                    return throwIf(account, key);
+                    const value = throwIf(account, key);
+                    result.storage[key] = value;
+                    persistenceWrap.set(result);
+                    return value;
                 }
                 return value;
             }
@@ -85,7 +90,10 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                 const value = result.storage[key];
                 if (typeof value === 'undefined') {
                     Logger.get('jsvm').debug('asyncResourceWrap', account, key);
-                    return throwIf(account, key);
+                    const value = throwIf(account, key);
+                    result.storage[key] = value;
+                    persistenceWrap.set(result);
+                    return value;
                 }
                 return value;
             }
