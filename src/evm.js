@@ -807,7 +807,9 @@ const initializeImports = (
         shl: (a, b, {stack, position}) => {
             const gasCost = getPrice('shl');
             jsvm_env.useGas(gasCost);
-            const result = b.shln(a.toNumber());
+            const numberOfBits = a.toNumber();
+            const result = b.shln(numberOfBits);
+            result.imaskn(256);  // clear bits with indexes higher or equal to 256
             stack.push(result);
             logger.debug('SHL', [a, b], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
