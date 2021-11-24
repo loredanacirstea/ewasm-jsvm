@@ -57,7 +57,7 @@ const initializeImports = (
             logger.debug('MSTORE8', [bytes, offset], [], getCache(), stack, changed, position, gasCost);
             return;
         },
-        loadMemory: function (offset, {stack, position}){
+        loadMemory: function (offset, {stack, position}) {
             const gasCost = getPrice('mload');
             jsvm_env.useGas(gasCost);
             const result = toBN(jsvm_env.loadMemory(offset));

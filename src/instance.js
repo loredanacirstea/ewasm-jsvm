@@ -166,7 +166,7 @@ function instance ({
 
     const _storeStateChanges = storeStateChanges(ilogger, vmcore.persistence);
 
-    const finishAction = (ilogger, persistence, address, wabi, appendtxinfo) => currentPromise => ({result: answ, gas, context = {}, logs}, e) => {
+    const finishAction = (ilogger, persistence, address, wabi, appendtxinfo) => currentPromise => ({result: answ, gas, context = {}, logs} = {}, e) => {
         if (!currentPromise) {
             console.log('No queued promise found.'); // throw new Error('No queued promise found.');
             return;
