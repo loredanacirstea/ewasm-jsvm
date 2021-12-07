@@ -105,6 +105,13 @@ it('test utils', async function () {
     expect(utils.uint8ArrayToHex(utils.hexToUint8Array(a))).toBe(a.toLowerCase());
 });
 
+it('test infinite loop halt', async function () {
+    const code = '60005b600160026001830360025700';
+    const runtime = await evmjs.runtimeSim(code, []);
+    const result = await runtime.mainRaw({...DEFAULT_TX_INFO, gasLimit: 23000}).catch(e => e.message);
+    expect(result.includes('out of gas')).toBe(true);
+});
+
 it('test gascost 1', async function () {
     const code = '6010600401';
     const runtime = await evmjs.runtimeSim(code, []);
