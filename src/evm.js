@@ -939,6 +939,7 @@ const interpreter = async ({bytecode, importObj, stack = [], calldata=[], positi
 const interpretOpcode = async ({bytecode, stack, importObj, position}) => {
     let hexcode;
     const args = [];
+    if (position > bytecode.length) throw new Error(`Invalid pc ${position}. Codesize ${bytecode.length}`);
     if (bytecode[position]) {
         hexcode = bytecode[position].toString(16).padStart(2, '0');
     }
@@ -967,6 +968,7 @@ const interpretOpcode = async ({bytecode, stack, importObj, position}) => {
         switch(opcodeName) {
             case 'jump':
                 obj = importObj.jump(...args, {stack, position});
+                if (bytecode[obj.position] !== 0x5b) throw new Error(`Invalid JUMP destination ${obj.position}`);
                 break;
             case 'jumpi':
                 obj = importObj.jumpi(...args, {stack, position});
