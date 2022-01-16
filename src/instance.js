@@ -50,6 +50,13 @@ function instance ({
         }
         return data;
     }
+    const storeAccount = ({address, runtimeCode, balance}) => {
+        vmcore.persistence.accounts.set({
+            address,
+            runtimeCode: typeof runtimeCode === 'string' ? hexToUint8Array(runtimeCode) : runtimeCode,
+            balance,
+        });
+    }
 
     const deploy = (bytecode, wabi, address) => async (...args) => {
         ilogger.debug('deploy', ...args);
@@ -75,9 +82,10 @@ function instance ({
         return initializeWrap(runtimeCode, wabi, address, true);
     }
 
-    const runtimeSim = (bytecode, wabi, address) => {
+    const runtimeSim = (runtimeCode, wabi, address) => {
         address = address || randomAddress();
-        return initializeWrap(bytecode, wabi, address, true);
+        storeAccount({address, runtimeCode, balance: 0});
+        return initializeWrap(runtimeCode, wabi, address, true);
     }
 
     const runtimeFromTransaction = async (txHash, provider) => {
