@@ -112,6 +112,18 @@ function divCeil(a, b) {
     return div.isNeg() ? div.isubn(1) : div.iaddn(1)
 }
 
+function bufferToUint8Array (buf) {
+    if (!buf) return undefined;
+    if (buf.constructor.name === 'Uint8Array'
+    || buf.constructor === Uint8Array) {
+        return buf;
+    }
+    if (typeof buf === 'string') buf = Buffer(buf);
+    var a = new Uint8Array(buf.length);
+    for (var i = 0; i < buf.length; i++) a[i] = buf[i];
+    return a;
+};
+
 module.exports = {
     strip0x,
     encodeWithSignature,
@@ -135,4 +147,5 @@ module.exports = {
     clone,
     keccak256,
     divCeil,
+    bufferToUint8Array,
 }

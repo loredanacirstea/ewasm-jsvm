@@ -10,6 +10,18 @@ const evmgas = require('./evmGasPrices');
 const { ERROR } = require('./constants.js');
 const {getPrice} = evmgas;
 
+const precompiles = {
+    '0000000000000000000000000000000000000001': 'ecrecover',
+    '0000000000000000000000000000000000000002': 'sha256',
+    '0000000000000000000000000000000000000003': 'ripemd160',
+    '0000000000000000000000000000000000000004': 'identity',
+    '0000000000000000000000000000000000000005': 'modexp',
+    '0000000000000000000000000000000000000006': 'ecadd',
+    '0000000000000000000000000000000000000007': 'ecmul',
+    '0000000000000000000000000000000000000008': 'ecpairing',
+    '0000000000000000000000000000000000000009': 'blake2f',
+}
+
 const initializeImports = (
     vmcore,
     txObj,
@@ -241,6 +253,18 @@ const initializeImports = (
         ) {
             const {baseFee} = getPrice('staticcall');
             jsvm_env.useGas(baseFee);
+
+            // Even for precompiles we now pay staticcall gas
+            const addressHex = address.toString(16).padStart(40, '0');
+            if (precompiles[addressHex]) return api.ethereum[precompiles[addressHex]](
+                gas_limit_i64,
+                dataOffset,
+                dataLength,
+                outputOffset,
+                outputLength,
+                {stack, position},
+            );
+
             const result = toBN(jsvm_env.callStatic(
                 gas_limit_i64,
                 BN2uint8arr(address),
@@ -801,7 +825,7 @@ const initializeImports = (
             jsvm_env.useGas(gasCost);
             const result = toBN(BN2uint8arr(bb).slice(nth, nth + 1));
             stack.push(result);
-            logger.debug('BYTE', [a, b], [result], getCache(), stack, undefined, position, gasCost);
+            logger.debug('BYTE', [bb], [result], getCache(), stack, undefined, position, gasCost);
             return {stack, position};
         },
         shl: (a, b, {stack, position}) => {
@@ -907,7 +931,117 @@ const initializeImports = (
         // helpers
         getGas: () => {
             return jsvm_env.getGas();
-        }
+        },
+        // precompiles
+        ecrecover: function (
+            gas_limit_i64,
+            dataOffset,
+            dataLength,
+            outputOffset,
+            outputLength,
+            {stack, position},
+        ) {
+            const {baseFee} = getPrice('ecrecover');
+            jsvm_env.useGas(baseFee);
+
+            const result = toBN(jsvm_env.ecrecover(
+                gas_limit_i64,
+                dataOffset,
+                dataLength,
+                outputOffset,
+                outputLength
+            ));
+            if (result.eqn(0)) stack.push(toBN(0));
+            else stack.push(toBN(1));
+            logger.debug('ECRECOVER', [
+                gas_limit_i64,
+                dataOffset,
+                dataLength,
+                outputOffset,
+                outputLength], [result], getCache(), stack, undefined, position, baseFee);
+
+            return {stack, position};
+        },
+        sha256: function (
+            gas_limit_i64,
+            dataOffset,
+            dataLength,
+            outputOffset,
+            outputLength,
+            {stack, position},
+        ) {
+            throw new Error('sha256 not implemented');
+        },
+        ripemd160: function (
+            gas_limit_i64,
+            dataOffset,
+            dataLength,
+            outputOffset,
+            outputLength,
+            {stack, position},
+        ) {
+            throw new Error('ripemd160 not implemented');
+        },
+        identity: function (
+            gas_limit_i64,
+            dataOffset,
+            dataLength,
+            outputOffset,
+            outputLength,
+            {stack, position},
+        ) {
+            throw new Error('identity not implemented');
+        },
+        modexp: function (
+            gas_limit_i64,
+            dataOffset,
+            dataLength,
+            outputOffset,
+            outputLength,
+            {stack, position},
+        ) {
+            throw new Error('modexp not implemented');
+        },
+        ecadd: function (
+            gas_limit_i64,
+            dataOffset,
+            dataLength,
+            outputOffset,
+            outputLength,
+            {stack, position},
+        ) {
+            throw new Error('ecadd not implemented');
+        },
+        ecmul: function (
+            gas_limit_i64,
+            dataOffset,
+            dataLength,
+            outputOffset,
+            outputLength,
+            {stack, position},
+        ) {
+            throw new Error('ecmul not implemented');
+        },
+        ecpairing: function (
+            gas_limit_i64,
+            dataOffset,
+            dataLength,
+            outputOffset,
+            outputLength,
+            {stack, position},
+        ) {
+            throw new Error('ecpairing not implemented');
+        },
+        blake2f: function (
+            gas_limit_i64,
+            dataOffset,
+            dataLength,
+            outputOffset,
+            outputLength,
+            {stack, position},
+        ) {
+            throw new Error('blake2f not implemented');
+        },
     }
 
     return api;

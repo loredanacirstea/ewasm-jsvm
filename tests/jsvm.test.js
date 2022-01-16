@@ -593,6 +593,15 @@ describe.each([
         expect(newbalance).toBe(balance);
     });
 
+    it('test c10 precompiles', async function () {
+        let o;
+        const runtime = await jsvm.deploy(contracts.c10[field], contracts.c10.abi)(15, {...DEFAULT_TX_INFO, gasLimit: 6000000});
+        deployments.c10 = runtime;
+
+        let result = await runtime.recover('0x7dbaf558b0a1a5dc7a67202117ab143c1d8605a983e4a743bc06fcc03162dc0d', '0x5d99b6f7f6d1f73d1a26497f2b1c89b24c0993913f86e9a2d02cd69887d9c94f3c880358579d811b21dd1b7fd9bb01c1d81d10e69f0384e675c32b39643be89200', DEFAULT_TX_INFO);
+        expect(result.signer).toBe('0x2cc1166f6212628A0deEf2B33BEFB2187D35b86c');
+    });
+
     it('test c11 - for loop', async function () {
         const runtime = await jsvm.deploy(contracts.c11[field], contracts.c2.abi)(DEFAULT_TX_INFO);
         let answ = await runtime.main( DEFAULT_TX_INFO);

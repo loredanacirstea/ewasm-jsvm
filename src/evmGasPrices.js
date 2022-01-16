@@ -123,6 +123,9 @@ function getPrice (name, options) {
 }
 
 const special = {
+    ecrecover: () => {
+        return {baseFee: toBN(3000)};
+    },
     extcodesize: () => {
         let baseFee = toBN(gasPrices.Gextcode.value);
         return {baseFee};

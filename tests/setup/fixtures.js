@@ -87,6 +87,7 @@ const c10 = [
     { name: 'testAddress', type: 'function', inputs: [{ name: 'addr', type: 'address'}], outputs: [{ name: 'addr', type: 'address'}]},
     { name: 'testint', type: 'function', inputs: [{ name: 'a', type: 'uint256'}], outputs: []},
     { name: 'anint', type: 'function', inputs: [], outputs: [{ name: 'anint', type: 'int256'}]},
+    { name: 'recover', type: 'function', inputs: [{ name: 'msgHash', type: 'bytes32'}, { name: 'signature', type: 'bytes'}], outputs: [{ name: 'signer', type: 'address'}]},
 ]
 
 const c12 = [

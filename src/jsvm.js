@@ -1,3 +1,4 @@
+const {ecrecover, publicToAddress, bufferToHex} = require('ethereumjs-util');
 const { ERROR } = require('./constants');
 const {
     cloneContext,
@@ -10,6 +11,7 @@ const {
     hexToUint8Array,
     extractAddress,
     toBN,
+    bufferToUint8Array,
 }  = require('./utils.js');
 
 // Uint8Array:
@@ -732,6 +734,46 @@ function jsvm(initPersistence, initBlocks, initLogs, Logger) {
                     return toBN(0);
                 },
                 transferValue,
+                ecrecover: function (
+                    gas_limit_i64,
+                    dataOffset,
+                    dataLength,
+                    outputOffset,
+                    outputLength,
+                ) {
+                    dataOffset = dataOffset.toNumber();
+                    dataLength = dataLength.toNumber();
+
+                    Logger.get('jsvm').get('ecrecover').debug(dataOffset, dataLength);
+
+                    const data = loadMemory(dataOffset, dataLength);
+                    const msgHash = data.slice(0, 32);
+                    const v = data.slice(32, 64)
+                    const r = data.slice(64, 96)
+                    const s = data.slice(96, 128)
+
+                    let result;
+                    try {
+                        result = ecrecover(Buffer.from(msgHash), toBN(v), Buffer.from(r), Buffer.from(s));
+                        result = publicToAddress(result);
+                        result = bufferToUint8Array(result);
+                        const size = 32;
+                        const address = new Uint8Array(size);
+                        address.set(result, size - 20);
+                        result = address;
+
+                    } catch (e) {
+                        result = new Uint8Array(32);
+                        console.debug(e);
+                    }
+                    if (outputOffset && outputLength) {
+                        outputOffset = outputOffset.toNumber();
+                        outputLength = outputLength.toNumber();
+                        storeMemory(result, outputOffset, outputLength);
+                    }
+                    setReturnData(result);
+                    return result;
+                }
         }
         return vmapi;
     }
