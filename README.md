@@ -1,6 +1,9 @@
 # ewasm-jsvm
 
-ewasm virtual machine for javascript
+1) ewasm virtual machine
+2) evm virtual machine
+
+UPDATE: the ewasm part is outdated and is currently being developed in another (private for now) repo. The EVM virtual machine can be used as a debugger (not efficient, as it offers a snapshot state of storage, memory and logs after each opcode).
 
 Specs: https://github.com/ewasm/design/blob/master/eth_interface.md.
 
